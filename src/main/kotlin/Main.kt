@@ -2,51 +2,71 @@ import org.apache.commons.vfs2.AllFileSelector
 import org.apache.commons.vfs2.FileObject
 import org.apache.commons.vfs2.NameScope
 import org.apache.commons.vfs2.VFS
-import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
 import java.io.File
 import java.nio.charset.StandardCharsets.UTF_8
 import kotlin.streams.asSequence
 
-data class Link(val from: String, val to: String, val text: String) {
+val dlm = "\"\"\""
+
+data class Link(val text: String, val context: String, val from: String, val to: String) {
     constructor(
         line: String, parsed: Array<String> = line.split(",")
-            .map { it.trim().replace("\"", "") }.toTypedArray()
-    ) : this(parsed[1].toLongPath(), parsed[2].toLongPath(), parsed[0])
+            .map { it.trim().replace(dlm, "") }.toTypedArray()
+    ) : this(parsed[0], parsed[1], parsed[2], parsed[3])
 
     override fun toString(): String =
-        "(${from.substring(59).take(20)}..${from.takeLast(20)}, " +
-                "${to.substring(59).take(20)}..${to.takeLast(20)}, $text)"
+        "$dlm${text}$dlm, $dlm${context}$dlm, $dlm${from.compact()}$dlm, $dlm${to.compact()}$dlm"
 }
 
-val regex = Regex("(.{0,100})<a.*href=\"([^<>:]*?)\"[^<>]*>([!-;?-~]{5,})</a>(.{0,100})")
 val archivesDir: String = "/home/breandan/PycharmProjects/zealds/archives/"
 
-fun extractLinks() {
-    println("text, source, target")
-    File(archivesDir).listFiles()?.toList()?.parallelStream()?.map { file ->
-        VFS.getManager().resolveFile("tgz:${file.absolutePath}")
-            .findFiles(AllFileSelector())
-            .asSequence()
-            .filter { it.name.toString().let { name -> ".html" in name || ".htm" in name } }
-            .map { it.getFilexLine() }
-            .flatten()
-            .map { (file, line) -> getAllLinks(line, file) }
-            .flatten()
-            .forEach { println("\"${it.text}\", \"${it.from.compact()}\", \"${it.to.compact()}\"") }
-    }?.forEach { }
+fun printLinks() {
+    println("link_text, context, source_document, target_document")
+    File(archivesDir).listFiles()?.toList()?.parallelStream()?.forEach { file ->
+        try {
+            fetchLinks(file).forEach { link -> println(link) }
+        } catch (e: Exception) {
+            System.err.println("Error reading $file")
+            e.printStackTrace()
+        }
+    }
 }
 
-private fun getAllLinks(line: String, relativeToFile: FileObject) =
-    regex.findAll(line).mapIndexedNotNull { idx, result ->
+private fun fetchLinks(file: File) =
+    VFS.getManager().resolveFile("tgz:${file.absolutePath}")
+        .findFiles(AllFileSelector())
+        .asSequence()
+        .filter { it.name.extension.toString().let { ext -> ext == "htm" || ext == "html" } }
+        .map { it.getFilexLine() }
+        .flatten()
+        .map { (file, line) -> getLinksInLine(line, file) }
+        .flatten()
+
+val linkRegex = Regex("<a[^<>]*href=\"([^<>:]*?)\"[^<>]*>([!-;?-~]{6,})</a>")
+val asciiRegex = Regex("[ -~]*")
+
+private fun getLinksInLine(line: String, relativeToFile: FileObject) =
+    linkRegex.findAll(line).mapIndexedNotNull { idx, result ->
         result.destructured.run {
             try {
-                val resolvedLink = relativeToFile.parent.resolveFile(component2())
-                if (!resolvedLink.exists()) null else
+                val resolvedLink = relativeToFile.parent.resolveFile(component1())
+                val linkText = Parser.parse(component2(), "")!!.text()!!
+                val context = Parser.parse(line, "")!!.text()!!
+                val indexOfLinkText = context.indexOf(linkText)
+                val preText = context.substring((indexOfLinkText - 120).coerceAtLeast(0), indexOfLinkText)
+                val subText = context.substring(indexOfLinkText + linkText.length, (indexOfLinkText + linkText.length + 120).coerceAtMost(context.length))
+                if (resolvedLink.exists() && context.length > (linkText.length + 8) && context.matches(asciiRegex))
                     Link(from = relativeToFile.toString(),
-                        to = relativeToFile.parent.resolveFile(component2()).also { it.exists() }.toString(),
-                        text = component3().let { if (it.contains("<")) Jsoup.parse(it).text() else it })
+                        to = resolvedLink.toString(),
+                        text = linkText,
+                        context = "$preText <<LNK>> $subText"
+                    )
+                else null
             } catch (e: Exception) {
+                System.err.println("Error parsing link in line: $line")
+                System.err.println("${Parser.parse(line, "")!!.text()!!}")
+                e.printStackTrace()
                 null
             }
         }
@@ -58,8 +78,7 @@ private fun FileObject.allText() =
 private fun FileObject.getFilexLine() =
     content.inputStream.bufferedReader(UTF_8).lineSequence().map { line -> Pair(this, line) }
 
-fun String.compact(prefixLength: Int = archivesDir.length + 11) =
-    substring(prefixLength).run { substringBefore(".tgz") + "::" + substringAfter("Contents/Resources/Documents/") }
+fun String.compact(prefixLength: Int = archivesDir.length + 11) = substring(prefixLength)
 
 // Needed because we botched the path serialization on the first pass (should be fixed now)
 val baseNameToDocset = mutableMapOf<String, String>()
@@ -90,6 +109,6 @@ private fun Link.readDestination() =
     }
 
 fun main() {
-//    extractLinks()
-    File("results.csv").readLinks().map { it.readDestination() }.forEach { it?.run { println(this) } }
+    printLinks()
+//    File("results.csv").readLinks().map { it.readDestination() }.forEach { it?.run { println(this) } }
 }
