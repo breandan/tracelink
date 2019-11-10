@@ -1,6 +1,5 @@
 import org.apache.commons.vfs2.AllFileSelector
 import org.apache.commons.vfs2.FileObject
-import org.apache.commons.vfs2.NameScope
 import org.apache.commons.vfs2.VFS
 import org.jsoup.parser.Parser
 import java.io.File
@@ -9,14 +8,20 @@ import kotlin.streams.asSequence
 
 val dlm = "\"\"\""
 
-data class Link(val text: String, val context: String, val from: String, val to: String) {
+data class Link(
+    val text: String,
+    val context: String,
+    val from: String,
+    val to: String,
+    val linkFragment: String
+) {
     constructor(
-        line: String, parsed: Array<String> = line.split(",")
+        line: String, parsed: Array<String> = line.split("$dlm, $dlm")
             .map { it.trim().replace(dlm, "") }.toTypedArray()
-    ) : this(parsed[0], parsed[1], parsed[2], parsed[3])
+    ) : this(parsed[0], parsed[1], parsed[2].toFullPath(), parsed[3].toFullPath(), parsed[4])
 
     override fun toString(): String =
-        "$dlm${text}$dlm, $dlm${context}$dlm, $dlm${from.compact()}$dlm, $dlm${to.compact()}$dlm"
+        "$dlm${text}$dlm, $dlm${context}$dlm, $dlm${from.compact()}$dlm, $dlm${to.compact()}$dlm, $dlm${linkFragment}$dlm"
 }
 
 val archivesDir: String = "/home/breandan/PycharmProjects/zealds/archives/"
@@ -43,7 +48,7 @@ private fun fetchLinks(file: File) =
         .map { (file, line) -> getLinksInLine(line, file) }
         .flatten()
 
-val linkRegex = Regex("<a[^<>]*href=\"([^<>:]*?)\"[^<>]*>([!-;?-~]{6,})</a>")
+val linkRegex = Regex("<a[^<>]*href=\"([^<>#:]*?)(#[^\"]*)?\"[^<>]*>([!-;?-~]{6,})</a>")
 val asciiRegex = Regex("[ -~]*")
 
 private fun getLinksInLine(line: String, relativeToFile: FileObject) =
@@ -51,64 +56,45 @@ private fun getLinksInLine(line: String, relativeToFile: FileObject) =
         result.destructured.run {
             try {
                 val resolvedLink = relativeToFile.parent.resolveFile(component1())
-                val linkText = Parser.parse(component2(), "")!!.text()!!
-                val context = Parser.parse(line, "")!!.text()!!
+                val linkText = Parser.parse(component3(), "")!!.wholeText()!!
+                val context = Parser.parse(line, "")!!.wholeText()!!
+                val fragment = component2()
                 val indexOfLinkText = context.indexOf(linkText)
                 val preText = context.substring((indexOfLinkText - 120).coerceAtLeast(0), indexOfLinkText)
                 val subText = context.substring(indexOfLinkText + linkText.length, (indexOfLinkText + linkText.length + 120).coerceAtMost(context.length))
                 if (resolvedLink.exists() && context.length > (linkText.length + 8) && context.matches(asciiRegex))
                     Link(from = relativeToFile.toString(),
                         to = resolvedLink.toString(),
+                        linkFragment = fragment,
                         text = linkText,
                         context = "$preText <<LNK>> $subText"
                     )
                 else null
             } catch (e: Exception) {
-                System.err.println("Error parsing link in line: $line")
-                System.err.println("${Parser.parse(line, "")!!.text()!!}")
-                e.printStackTrace()
                 null
             }
         }
     }
 
-private fun FileObject.allText() =
-    Parser.parse(content.inputStream.bufferedReader(UTF_8).lines().asSequence().joinToString(""), "").text()
+private fun FileObject.parseHtml(uri: String) =
+    Parser.parse(content.inputStream.bufferedReader(UTF_8).lines().asSequence().joinToString(""), uri)
 
 private fun FileObject.getFilexLine() =
     content.inputStream.bufferedReader(UTF_8).lineSequence().map { line -> Pair(this, line) }
 
 fun String.compact(prefixLength: Int = archivesDir.length + 11) = substring(prefixLength)
 
-// Needed because we botched the path serialization on the first pass (should be fixed now)
-val baseNameToDocset = mutableMapOf<String, String>()
+fun String.toFullPath() = "tgz:file://$archivesDir${this.substringBeforeLast("%")}"
 
-fun String.toLongPath() = "tgz:file://$archivesDir${split("::").let {
-    val docset = baseNameToDocset.getOrPut(it.first()) {
-        VFS.getManager().resolveFile("tgz:file://$archivesDir" + it.first() + ".tgz")
-            .children.first { it.name.extension == "docset" }.name.baseName
-    }
-    it.first() + ".tgz!/" +
-            if (it.last().contains(".tgz!/")) it.last().substringAfter(".tgz!/")
-            else ("$docset/Contents/Resources/Documents/" + it.last())
-}
-}"
-
-fun File.readLinks() = readLines().drop(3).parallelStream().map { Link(it) }
+fun File.readLinks() = readLines().drop(5).parallelStream().map { Link(it) }
 
 private fun Link.readDestination() =
-    try {
-        VFS.getManager().resolveFile(to.substringBeforeLast("%")).allText()
-    } catch (e: Exception) {
-        val path = to.substringAfterLast("/").substringBeforeLast("%")
-        val t = VFS.getManager().resolveFile(from.substringBeforeLast("/"))
-        try {
-            val alternateDest = t.resolveFile(path, NameScope.CHILD)
-            alternateDest.allText()
-        } catch (e: Exception) { null }
-    }
+    VFS.getManager().resolveFile(to).parseHtml("$to$linkFragment")
+
+fun parseLinks(file: String) = File(file).readLinks()
+    .map { try { it.readDestination() } catch (ex: Exception) { null } }
+    .filter { it != null }
 
 fun main() {
     printLinks()
-//    File("results.csv").readLinks().map { it.readDestination() }.forEach { it?.run { println(this) } }
 }
