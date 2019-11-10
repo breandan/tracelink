@@ -68,6 +68,7 @@ private fun FileObject.getFilexLine() =
 fun String.compact(prefixLength: Int = archivesDir.length + 11) =
     substring(prefixLength).run { substringBefore(".tgz") + "::" + substringAfter("Contents/Resources/Documents/") }
 
+// Needed because we botched the path serialization on the first pass (should be fixed now)
 val baseNameToDocset = mutableMapOf<String, String>()
 
 fun String.toLongPath() = "tgz:file://$archivesDir${split("::").let {
@@ -81,9 +82,9 @@ fun String.toLongPath() = "tgz:file://$archivesDir${split("::").let {
 }
 }"
 
-fun File.readLinks() = readLines().asSequence().drop(3).map { Link(it) }
+fun File.readLinks() = readLines().drop(3).parallelStream().map { Link(it) }
 
-private fun Link.readDestination() {
+private fun Link.readDestination() =
     try {
         VFS.getManager().resolveFile(to.substringBeforeLast("%")).allText()
     } catch (e: Exception) {
@@ -92,13 +93,10 @@ private fun Link.readDestination() {
         try {
             val alternateDest = t.resolveFile(path, NameScope.CHILD)
             alternateDest.allText()
-        } catch (e: Exception) {
-//                println("Could not locate file $path from $t} or ancestors")
-        }
+        } catch (e: Exception) { null }
     }
-}
 
 fun main() {
 //    extractLinks()
-//    File("results.csv").readLinks().map { it.readDestination() }
+    File("results.csv").readLinks().map { it.readDestination() }.forEach { it?.run { println(this) } }
 }
