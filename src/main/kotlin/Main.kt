@@ -52,13 +52,6 @@ private fun getAllLinks(line: String, relativeToFile: FileObject) =
         }
     }
 
-fun getTextInFile(file: String) =
-    VFS.getManager().resolveFile(file)
-        .findFiles(AllFileSelector())
-        .asSequence()
-        .filter { it.name.toString().let { name -> ".html" in name || ".htm" in name } }
-        .map { it.allText() }
-
 private fun FileObject.allText() =
     Parser.parse(content.inputStream.bufferedReader(UTF_8).lines().asSequence().joinToString(""), "").text()
 
