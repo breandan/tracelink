@@ -13,8 +13,9 @@ import org.apache.lucene.store.Directory
 import org.apache.lucene.store.RAMDirectory
 import java.io.FileReader
 import java.nio.file.Paths
+import kotlin.streams.asSequence
 
-data class Document(
+data class Doc(
     val uri: String,
     val title: String,
     val contents: String
@@ -22,43 +23,38 @@ data class Document(
     override fun toString() = "$uri, $title, $contents"
 }
 
+val analyzer = StandardAnalyzer()
+val index = RAMDirectory() // FSDirectory.open(Paths.get("test"))
+val config = IndexWriterConfig(analyzer)
+
+
 fun main() {
-    parseLinks("links_with_context.csv")
-        .filter { it!!.baseUri().contains("#") }
-        .map {
-            val uri = it!!.baseUri()
-            println(uri)
-            val title = try {
-                it.title().run { if (isBlank()) "EMPTY_TITLE" else this }
-            } catch (e: Exception) {
-                "EMPTY_TITLE"
-            }
-            val contents = if (uri.contains("#")) {
-                it.parseFragment(uri.substringAfterLast("#")) ?: it.wholeText()
-            }  else it.wholeText()
-            Document(uri, title, contents)
-        }.forEach { if (it.uri.contains("#")) println(it.contents) }
+    IndexWriter(index, config).use { w ->
+        parseLinks("links_with_context.csv")
+            .map { jDocToDoc(it!!) }
+            .asSequence().take(10)
+            .forEach { addDoc(w, it); println("Indexed: ${it.contents}") }
+    }
+
+    query("DataBuffer")
+}
+
+private fun jDocToDoc(it: org.jsoup.nodes.Document): Doc {
+    val uri = it.baseUri()
+    val title = try {
+        it.title().run { if (isBlank()) "EMPTY_TITLE" else this }
+    } catch (e: Exception) {
+        "EMPTY_TITLE"
+    }
+// if (uri.contains("#")) { it.parseFragment(uri.substringAfterLast("#")) ?: it.wholeText() }  else it.wholeText()
+    val contents = it.wholeText()
+    return Doc(uri, title, contents)
 }
 
 private fun org.jsoup.nodes.Document.parseFragment(fragment: String): String? =
     select("[id='$fragment']")?.firstOrNull()?.wholeText()
 
-fun analyze() {
-    val analyzer = StandardAnalyzer()
-    val index = RAMDirectory() // FSDirectory.open(Paths.get("test"))
-
-    val config = IndexWriterConfig(analyzer)
-
-    val w = IndexWriter(index, config)
-    addDoc(w, "Lucene in Action", "193398817")
-    addDoc(w, "Lucene for Dummies", "55320055Z")
-    addDoc(w, "Managing Gigabytes", "55063554A")
-    addDoc(w, "The Art of Computer Science", "9900333X")
-    w.close()
-
-    // 2. query
-    val querystr = "lucene"
-
+fun query(querystr: String = "test") {
     // the "title" arg specifies the default field to use
     // when no field is explicitly specified in the query.
     val q = QueryParser("title", analyzer).parse(querystr)
@@ -76,7 +72,7 @@ fun analyze() {
     for (i in hits.indices) {
         val docId = hits[i].doc
         val d = searcher.doc(docId)
-        println((i + 1).toString() + ". " + d.get("isbn") + "\t" + d.get("title"))
+        println((i + 1).toString() + ". " + d.get("title") + "\t" + d.get("uri"))
     }
 
     // reader can only be closed when there
@@ -84,10 +80,11 @@ fun analyze() {
     reader.close()
 }
 
-private fun addDoc(w: IndexWriter, title: String, isbn: String) =
+private fun addDoc(w: IndexWriter, d: Doc) =
     w.addDocument(Document().apply {
-        add(TextField("title", title, YES))
-        add(StringField("contents", isbn, YES))
+        add(TextField("title", d.title, YES))
+        add(TextField("uri", d.uri, YES))
+        add(TextField("contents", d.contents, YES))
     })
 
 class LuceneFileSearch(val indexDirectory: Directory, val analyzer: StandardAnalyzer) {

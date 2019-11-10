@@ -48,6 +48,7 @@ private fun fetchLinks(file: File) =
         .map { (file, line) -> getLinksInLine(line, file) }
         .flatten()
 
+//                                     LINK URI   FRAGMENT           ANCHOR TEXT
 val linkRegex = Regex("<a[^<>]*href=\"([^<>#:]*?)(#[^\"]*)?\"[^<>]*>([!-;?-~]{6,})</a>")
 val asciiRegex = Regex("[ -~]*")
 
