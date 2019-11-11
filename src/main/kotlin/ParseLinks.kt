@@ -8,6 +8,8 @@ import kotlin.streams.asSequence
 
 val dlm = "\"\"\""
 
+fun String.toFullPath() = "tgz:file://$archivesDir${this.substringBeforeLast("%")}"
+
 data class Link(
     val text: String,
     val context: String,
@@ -19,6 +21,8 @@ data class Link(
         line: String, parsed: Array<String> = line.split("$dlm, $dlm")
             .map { it.trim().replace(dlm, "") }.toTypedArray()
     ) : this(parsed[0], parsed[1], parsed[2].toFullPath(), parsed[3].toFullPath(), parsed[4])
+
+    fun String.compact(prefixLength: Int = archivesDir.length + 11) = substring(prefixLength)
 
     override fun toString(): String =
         "$dlm${text}$dlm, $dlm${context}$dlm, $dlm${from.compact()}$dlm, $dlm${to.compact()}$dlm, $dlm${linkFragment}$dlm"
@@ -37,6 +41,9 @@ fun printLinks() {
         }
     }
 }
+
+private fun FileObject.getFilexLine() =
+    content.inputStream.bufferedReader(UTF_8).lineSequence().map { line -> Pair(this, line) }
 
 private fun fetchLinks(file: File) =
     VFS.getManager().resolveFile("tgz:${file.absolutePath}")
@@ -77,22 +84,14 @@ private fun getLinksInLine(line: String, relativeToFile: FileObject) =
         }
     }
 
-private fun FileObject.parseHtml(uri: String) =
+private fun FileObject.asHtmlDoc(uri: String) =
     Parser.parse(content.inputStream.bufferedReader(UTF_8).lines().asSequence().joinToString(""), uri)
 
-private fun FileObject.getFilexLine() =
-    content.inputStream.bufferedReader(UTF_8).lineSequence().map { line -> Pair(this, line) }
-
-fun String.compact(prefixLength: Int = archivesDir.length + 11) = substring(prefixLength)
-
-fun String.toFullPath() = "tgz:file://$archivesDir${this.substringBeforeLast("%")}"
-
-fun File.readLinks() = readLines().drop(5).parallelStream().map { Link(it) }
-
 private fun Link.readDestination() =
-    VFS.getManager().resolveFile(to).parseHtml("$to$linkFragment")
+    VFS.getManager().resolveFile(to).asHtmlDoc("$to$linkFragment")
 
-fun parseLinks(file: String) = File(file).readLinks()
+fun parseLinks(file: String) = File(file)
+    .readLines().drop(5).parallelStream().map { Link(it) }
     .map { try { it.readDestination() } catch (ex: Exception) { null } }
     .filter { it != null }
 
