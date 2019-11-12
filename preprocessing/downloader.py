@@ -6,7 +6,8 @@ import gzip
 import io
 
 def download_docs():
-    os.makedirs(os.path.dirname('archives'), exist_ok=True)
+    if not os.path.exists('archives'):
+        os.makedirs('archives')
     with open('index.json') as json_file:
         data = json.load(json_file)
         for p in data['docsets']:
