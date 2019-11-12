@@ -28,7 +28,7 @@ data class Link(
         "$dlm${text}$dlm, $dlm${context}$dlm, $dlm${from.compact()}$dlm, $dlm${to.compact()}$dlm, $dlm${linkFragment}$dlm"
 }
 
-val archivesDir: String = "/home/breandan/PycharmProjects/zealds/archives/"
+val archivesDir: String = "archives/"
 
 fun printLinks() {
     println("link_text, context, source_document, target_document")
