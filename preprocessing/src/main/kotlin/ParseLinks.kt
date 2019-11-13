@@ -89,8 +89,8 @@ private fun String.getAllLinks(relativeTo: FileObject): Sequence<Link> =
         result.destructured.let { regexGroups ->
             try {
                 val resolvedLink = relativeTo.parent.resolveFile(regexGroups.component1())
-                val linkText = Parser.parse(regexGroups.component3(), "")!!.wholeText()!!
-                val context = Parser.parse(this, "")!!.wholeText()!!
+                val linkText = Parser.parse(regexGroups.component3(), "")!!.text()!!
+                val context = Parser.parse(this, "")!!.text()!!
                 val fragment = regexGroups.component2()
                 val indexOfLinkText = context.indexOf(linkText)
                 val preText = context.substring((indexOfLinkText - 120).coerceAtLeast(0), indexOfLinkText)

@@ -62,12 +62,12 @@ private fun jDocToDoc(it: org.jsoup.nodes.Document): Doc {
         "EMPTY_TITLE"
     }
 
-    val contents = it.wholeText()
+    val contents = it.text()
     return Doc(uri, title, contents)
 }
 
 private fun org.jsoup.nodes.Document.parseFragment(fragment: String): String? =
-    select("[id='$fragment']")?.firstOrNull()?.wholeText()
+    select("[id='$fragment']")?.firstOrNull()?.text()
 
 fun query(querystr: String = "test") {
     // the "title" arg specifies the default field to use
