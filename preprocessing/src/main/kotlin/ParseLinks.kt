@@ -1,21 +1,31 @@
+
 import org.apache.commons.vfs2.AllFileSelector
 import org.apache.commons.vfs2.FileObject
 import org.apache.commons.vfs2.VFS
 import org.jsoup.parser.Parser
 import java.io.File
 import java.nio.charset.StandardCharsets.UTF_8
-import kotlin.streams.asSequence
+
+/**
+ * Intended to be called from the command line, e.g. `./gradlew run > file.csv`
+ */
 
 val dlm = "\"\"\""
 
 fun String.toFullPath() = "tgz:file://$archivesDir${this.substringBeforeLast("%")}"
 
+/**
+ * Class representing an HTML link which the document's author saw fit to reference
+ * another page in the same doc set. The following features are the minimal set of
+ * features which are needed to perform link prediction.
+ */
+
 data class Link(
-    val text: String,
-    val context: String,
-    val from: String,
-    val to: String,
-    val linkFragment: String
+    val text: String,        // Anchor text of link itself
+    val context: String,     // Surrounding text on the same line
+    val from: String,        // Original document location
+    val to: String,          // Target document location
+    val linkFragment: String // Link fragment (indicating subsection)
 ) {
     constructor(
         line: String, parsed: Array<String> = line.split("$dlm, $dlm")
@@ -28,7 +38,11 @@ data class Link(
         "$dlm${text}$dlm, $dlm${context}$dlm, $dlm${from.compact()}$dlm, $dlm${to.compact()}$dlm, $dlm${linkFragment}$dlm"
 }
 
-val archivesDir: String = "archives/"
+val archivesDir: String = "archives/" // Parent directory (assumed to contain `.tgz` files)
+
+/**
+ * Extracts documents from archives in parallel and prints the links in CSV format.
+ */
 
 fun printLinks() {
     println("link_text, context, source_document, target_document")
@@ -45,6 +59,10 @@ fun printLinks() {
 private fun FileObject.getFilexLine() =
     content.inputStream.bufferedReader(UTF_8).lineSequence().map { line -> Pair(this, line) }
 
+/**
+ * Streams the contents of HTML files and returns all links contained within each document.
+ */
+
 private fun fetchLinks(file: File) =
     VFS.getManager().resolveFile("tgz:${file.absolutePath}")
         .findFiles(AllFileSelector())
@@ -52,26 +70,33 @@ private fun fetchLinks(file: File) =
         .filter { it.name.extension.toString().let { ext -> ext == "htm" || ext == "html" } }
         .map { it.getFilexLine() }
         .flatten()
-        .map { (file, line) -> getLinksInLine(line, file) }
+        .map { (file, line) -> line.getAllLinks(relativeTo = file) }
         .flatten()
 
 //                                     LINK URI   FRAGMENT           ANCHOR TEXT
 val linkRegex = Regex("<a[^<>]*href=\"([^<>#:]*?)(#[^\"]*)?\"[^<>]*>([!-;?-~]{6,})</a>")
 val asciiRegex = Regex("[ -~]*")
 
-private fun getLinksInLine(line: String, relativeToFile: FileObject) =
-    linkRegex.findAll(line).mapIndexedNotNull { idx, result ->
-        result.destructured.run {
+/**
+ * Returns all HTML links within a string whose anchor text is shorter than the string
+ * by a fixed margin. This catches links which have surrounding context in documentation
+ * containing a mixture of natural language and source code. Links are resolved relative
+ * to a document path, and validated so that all links returned point to a valid URL.
+ */
+
+private fun String.getAllLinks(relativeTo: FileObject): Sequence<Link> =
+    linkRegex.findAll(this).mapIndexedNotNull { idx, result ->
+        result.destructured.let { regexGroups ->
             try {
-                val resolvedLink = relativeToFile.parent.resolveFile(component1())
-                val linkText = Parser.parse(component3(), "")!!.wholeText()!!
-                val context = Parser.parse(line, "")!!.wholeText()!!
-                val fragment = component2()
+                val resolvedLink = relativeTo.parent.resolveFile(regexGroups.component1())
+                val linkText = Parser.parse(regexGroups.component3(), "")!!.wholeText()!!
+                val context = Parser.parse(this, "")!!.wholeText()!!
+                val fragment = regexGroups.component2()
                 val indexOfLinkText = context.indexOf(linkText)
                 val preText = context.substring((indexOfLinkText - 120).coerceAtLeast(0), indexOfLinkText)
                 val subText = context.substring(indexOfLinkText + linkText.length, (indexOfLinkText + linkText.length + 120).coerceAtMost(context.length))
                 if (resolvedLink.exists() && context.length > (linkText.length + 8) && context.matches(asciiRegex))
-                    Link(from = relativeToFile.toString(),
+                    Link(from = relativeTo.toString(),
                         to = resolvedLink.toString(),
                         linkFragment = fragment,
                         text = linkText,
@@ -83,17 +108,6 @@ private fun getLinksInLine(line: String, relativeToFile: FileObject) =
             }
         }
     }
-
-private fun FileObject.asHtmlDoc(uri: String) =
-    Parser.parse(content.inputStream.bufferedReader(UTF_8).lines().asSequence().joinToString(""), uri)
-
-private fun Link.readDestination() =
-    VFS.getManager().resolveFile(to).asHtmlDoc("$to$linkFragment")
-
-fun parseLinks(file: String) = File(file)
-    .readLines().drop(5).parallelStream().map { Link(it) }
-    .map { try { it.readDestination() } catch (ex: Exception) { null } }
-    .filter { it != null }
 
 fun main() {
     printLinks()

@@ -1,3 +1,5 @@
+import org.apache.commons.vfs2.FileObject
+import org.apache.commons.vfs2.VFS
 import org.apache.lucene.analysis.standard.StandardAnalyzer
 import org.apache.lucene.document.Document
 import org.apache.lucene.document.Field.Store.YES
@@ -9,7 +11,9 @@ import org.apache.lucene.queryparser.classic.QueryParser
 import org.apache.lucene.search.IndexSearcher
 import org.apache.lucene.search.TopScoreDocCollector
 import org.apache.lucene.store.MMapDirectory
+import org.jsoup.parser.Parser
 import java.io.File
+import java.nio.charset.StandardCharsets
 import kotlin.streams.asSequence
 import kotlin.system.measureTimeMillis
 
@@ -24,6 +28,17 @@ data class Doc(
 val analyzer = StandardAnalyzer()
 val index = MMapDirectory(File("test").toPath())
 val config = IndexWriterConfig(analyzer)
+
+private fun FileObject.asHtmlDoc(uri: String) =
+    Parser.parse(content.inputStream.bufferedReader(StandardCharsets.UTF_8).lines().asSequence().joinToString(""), uri)
+
+private fun Link.readDestination() =
+    VFS.getManager().resolveFile(to).asHtmlDoc("$to$linkFragment")
+
+fun parseLinks(file: String) = File(file)
+    .readLines().drop(5).parallelStream().map { Link(it) }
+    .map { try { it.readDestination() } catch (ex: Exception) { null } }
+    .filter { it != null }
 
 fun main() {
     indexDocs("links_with_context.csv")
