@@ -2,13 +2,21 @@
 
 ## Dataset
 
-[Zeal User Contributed Docsets](https://zealusercontributions.now.sh/)
+The following datasets are used to extract relevant links from documentation:
 
-## Preprocessing
+* [Zeal User Contributed Docsets](https://zealusercontributions.now.sh/)
 
-Links are in the following format. See [parser](/parser).
+It may be interesting to explore code search and suggestion, based on context:
+
+* [GitHub CodeSearchNet Challenge](https://github.com/github/CodeSearchNet)
+
+## [Preprocessing](preprocessing/README.md)
+
+Links matching a simple pattern are collected from API documentation.
 
 ## Sample
+
+Postprocessed dataset is in the following format: 
 
 ```
 link	context	source	target	fragment
