@@ -8,7 +8,9 @@ To run the preprocessor, JDK 1.8+ and Python 3+ are required.
 
 1. Run `python `[`./downloader.py`](https://github.com/breandan/tracelink/blob/master/preprocessing/downloader.py) to download `.tgz` files into the `archives/` directory.
 
-2. Run `./gradlew run > dataset.csv` to extract the links.
+2. Run `./gradlew ParseLinks > dataset.csv` to extract the links.
+
+3. Run `./gradlew ParseDocs` to build the Lucene index.
 
 ## Extraction
 

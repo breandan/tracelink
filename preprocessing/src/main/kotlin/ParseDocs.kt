@@ -1,11 +1,11 @@
 import org.apache.commons.vfs2.FileObject
-import org.apache.commons.vfs2.VFS
 import org.apache.lucene.analysis.standard.StandardAnalyzer
 import org.apache.lucene.document.Document
 import org.apache.lucene.document.Field.Store.YES
 import org.apache.lucene.document.TextField
 import org.apache.lucene.index.*
-import org.apache.lucene.queryparser.classic.QueryParser
+import org.apache.lucene.index.IndexWriterConfig.OpenMode.CREATE
+import org.apache.lucene.queryparser.classic.MultiFieldQueryParser
 import org.apache.lucene.search.IndexSearcher
 import org.apache.lucene.search.TermStatistics
 import org.apache.lucene.search.TopScoreDocCollector
@@ -24,37 +24,31 @@ data class Doc(
 }
 
 val analyzer = StandardAnalyzer()
-val index = MMapDirectory(File("test").toPath())
-val config = IndexWriterConfig(analyzer)
+val index = MMapDirectory(File("index").toPath())
+val config = IndexWriterConfig(analyzer).apply { setOpenMode(CREATE) }
 
 private fun FileObject.asHtmlDoc(uri: String) =
     try {
         Parser.parse(content.getString(StandardCharsets.UTF_8), uri)
     } catch (e: Exception) {
-        e.printStackTrace()
-        throw e
+        null
     }
 
-private fun Link.readDestination() =
-    VFS.getManager().resolveFile(to).asHtmlDoc("$to$linkFragment")
-
 fun parseDocs() =
-    File(archivesDir).listFiles().asList().filter { it.length() < 900000 }.take(3)
+    File(archivesDir).listFiles().asList()
         .parallelStream()
-        .map { it.getHtmlFiles() }
-        .map { it.map { jDocToDoc(it.asHtmlDoc("${it.url}")) } }
-
-val docPath = "../links_with_context.csv"
+        .map { it.getHtmlFiles().map { it.asHtmlDoc("${it.url}")?.let { jDocToDoc(it) } } }
 
 fun main() {
     indexDocs()
 
-    println("Query took: " + measureTimeMillis { query("contents:child") } + " ms")
+    println("Query took: " + measureTimeMillis { query("the") } + " ms")
 }
 
 private fun indexDocs() {
+    var t = 0
     val iw = IndexWriter(index, config)
-    parseDocs().forEach { it.forEach { iw.addDoc(it); println("Indexed: ${it.contents}") } }
+    parseDocs().forEach { it.forEach { if (it != null) { iw.addDoc(it); t+=1; if(t % 1000 == 0) println("Indexed ${it.uri}") } } }
     iw.close()
 }
 
@@ -76,10 +70,10 @@ private fun org.jsoup.nodes.Document.parseFragment(fragment: String): String? =
 fun query(querystr: String = "test") {
     // the "title" arg specifies the default field to use
     // when no field is explicitly specified in the query.
-    val q = QueryParser("title", analyzer).parse(querystr)
+    val q = MultiFieldQueryParser(arrayOf("title", "contents", "uri"), analyzer).parse(querystr)
 
     // search
-    val hitsPerPage = 10
+    val hitsPerPage = 9
     val reader = DirectoryReader.open(index)
     val searcher = IndexSearcher(reader)
 
