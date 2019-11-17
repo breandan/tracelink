@@ -49,7 +49,7 @@ fun printLinks() {
     println("link_text, context, source_document, target_document")
     File(archivesDir).listFiles()?.toList()?.parallelStream()?.forEach { file ->
         try {
-            fetchLinks(file).forEach { it.forEach { it.forEach { link -> if (link != null) println(link) } } }
+            fetchLinks(file)?.forEach { it.forEach { it.forEach { link -> if (link != null) println(link) } } }
         } catch (e: Exception) {
             System.err.println("Error reading $file")
             e.printStackTrace()
@@ -65,13 +65,17 @@ private fun FileObject.getLinksInFile() =
  */
 
 private fun fetchLinks(archive: File) =
-    archive.getHtmlFiles().map { it.getLinksInFile() }
+    archive.getHtmlFiles()?.map { it.getLinksInFile() }
 
 
 fun File.getHtmlFiles() =
-    VFS.getManager().resolveFile("tgz:${absolutePath}")
-    .findFiles(AllFileSelector()).asList().stream()
-    .filter { it.name.extension.toString().let { ext -> ext == "htm" || ext == "html" } }
+    try {
+        VFS.getManager().resolveFile("tgz:${absolutePath}")
+            .findFiles(AllFileSelector()).asList().stream()
+            .filter { it.name.extension.toString().let { ext -> ext == "htm" || ext == "html" } }
+    } catch(ex: Exception) {
+        null
+    }
 
 //                                     LINK URI   FRAGMENT           ANCHOR TEXT
 val linkRegex = Regex("<a[^<>]*href=\"([^<>#:]*?)(#[^\"]*)?\"[^<>]*>([!-;?-~]{6,})</a>")

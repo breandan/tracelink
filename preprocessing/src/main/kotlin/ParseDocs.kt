@@ -12,7 +12,7 @@ import org.apache.lucene.search.TopScoreDocCollector
 import org.apache.lucene.store.MMapDirectory
 import org.jsoup.parser.Parser
 import java.io.File
-import java.nio.charset.StandardCharsets
+import java.nio.charset.StandardCharsets.UTF_8
 import kotlin.system.measureTimeMillis
 
 data class Doc(
@@ -29,26 +29,30 @@ val config = IndexWriterConfig(analyzer).apply { setOpenMode(CREATE) }
 
 private fun FileObject.asHtmlDoc(uri: String) =
     try {
-        Parser.parse(content.getString(StandardCharsets.UTF_8), uri)
+        Parser.parse(content.getString(UTF_8), uri)
     } catch (e: Exception) {
         null
     }
 
 fun parseDocs() =
-    File(archivesDir).listFiles().asList()
+    File(archivesDir).listFiles()!!.asList()
         .parallelStream()
-        .map { it.getHtmlFiles().map { it.asHtmlDoc("${it.url}")?.let { jDocToDoc(it) } } }
+        .map { it.getHtmlFiles()?.map { file -> file.asHtmlDoc("${file.url}")?.let { jDocToDoc(it) } } }
 
 fun main() {
     indexDocs()
 
-    println("Query took: " + measureTimeMillis { query("the") } + " ms")
+    println("Query took: " + measureTimeMillis { query("test") } + " ms")
 }
 
 private fun indexDocs() {
     var t = 0
     val iw = IndexWriter(index, config)
-    parseDocs().forEach { it.forEach { if (it != null) { iw.addDoc(it); t+=1; if(t % 1000 == 0) println("Indexed ${it.uri}") } } }
+    parseDocs().forEach { docStream ->
+        docStream?.forEach { doc ->
+            doc?.run { iw.addDoc(this); t += 1; if (t % 1000 == 0) println("Indexed $uri") }
+        }
+    }
     iw.close()
 }
 
