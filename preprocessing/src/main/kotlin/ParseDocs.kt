@@ -7,6 +7,7 @@ import org.apache.lucene.document.TextField
 import org.apache.lucene.index.*
 import org.apache.lucene.queryparser.classic.QueryParser
 import org.apache.lucene.search.IndexSearcher
+import org.apache.lucene.search.TermStatistics
 import org.apache.lucene.search.TopScoreDocCollector
 import org.apache.lucene.store.MMapDirectory
 import org.jsoup.parser.Parser
@@ -38,7 +39,7 @@ private fun Link.readDestination() =
     VFS.getManager().resolveFile(to).asHtmlDoc("$to$linkFragment")
 
 fun parseDocs() =
-    File(archivesDir).listFiles().asList().take(3)
+    File(archivesDir).listFiles().asList().filter { it.length() < 900000 }.take(3)
         .parallelStream()
         .map { it.getHtmlFiles() }
         .map { it.map { jDocToDoc(it.asHtmlDoc("${it.url}")) } }
@@ -48,12 +49,13 @@ val docPath = "../links_with_context.csv"
 fun main() {
     indexDocs()
 
-    println("Query took: " + measureTimeMillis { query("BUFFER_FILE_EXTENSION") } + " ms")
+    println("Query took: " + measureTimeMillis { query("contents:child") } + " ms")
 }
 
 private fun indexDocs() {
     val iw = IndexWriter(index, config)
-    parseDocs().forEach { it.forEach { iw.addDoc(it); println("Indexed: ${it.uri}") } }
+    parseDocs().forEach { it.forEach { iw.addDoc(it); println("Indexed: ${it.contents}") } }
+    iw.close()
 }
 
 private fun jDocToDoc(it: org.jsoup.nodes.Document): Doc {
@@ -80,9 +82,6 @@ fun query(querystr: String = "test") {
     val hitsPerPage = 10
     val reader = DirectoryReader.open(index)
     val searcher = IndexSearcher(reader)
-    val cs = searcher.collectionStatistics("contents")
-    val term = Term("contents", "browser")
-    val ts = searcher.termStatistics(term, TermStates.build(searcher.topReaderContext, term, true))
 
     val collector = TopScoreDocCollector.create(hitsPerPage, 10)
     searcher.search(q, collector)
@@ -95,6 +94,13 @@ fun query(querystr: String = "test") {
         val d = searcher.doc(docId)
         println((i + 1).toString() + ". " + d.get("title") + "\t" + d.get("uri"))
     }
+    reader.close()
+}
+
+private fun IndexSearcher.getStats(term: String): TermStatistics? {
+    val cs = collectionStatistics("contents")
+    val tm = Term("contents", term)
+    return termStatistics(tm, TermStates.build(topReaderContext, tm, true))
 }
 
 private fun IndexWriter.addDoc(d: Doc) =
