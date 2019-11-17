@@ -4,9 +4,7 @@ import org.apache.lucene.analysis.standard.StandardAnalyzer
 import org.apache.lucene.document.Document
 import org.apache.lucene.document.Field.Store.YES
 import org.apache.lucene.document.TextField
-import org.apache.lucene.index.DirectoryReader
-import org.apache.lucene.index.IndexWriter
-import org.apache.lucene.index.IndexWriterConfig
+import org.apache.lucene.index.*
 import org.apache.lucene.queryparser.classic.QueryParser
 import org.apache.lucene.search.IndexSearcher
 import org.apache.lucene.search.TopScoreDocCollector
@@ -14,7 +12,6 @@ import org.apache.lucene.store.MMapDirectory
 import org.jsoup.parser.Parser
 import java.io.File
 import java.nio.charset.StandardCharsets
-import kotlin.streams.asSequence
 import kotlin.system.measureTimeMillis
 
 data class Doc(
@@ -30,28 +27,33 @@ val index = MMapDirectory(File("test").toPath())
 val config = IndexWriterConfig(analyzer)
 
 private fun FileObject.asHtmlDoc(uri: String) =
-    Parser.parse(content.inputStream.bufferedReader(StandardCharsets.UTF_8).lines().asSequence().joinToString(""), uri)
+    try {
+        Parser.parse(content.getString(StandardCharsets.UTF_8), uri)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        throw e
+    }
 
 private fun Link.readDestination() =
     VFS.getManager().resolveFile(to).asHtmlDoc("$to$linkFragment")
 
-fun parseLinks(file: String) = File(file)
-    .readLines().drop(5).parallelStream().map { Link(it) }
-    .map { try { it.readDestination() } catch (ex: Exception) { null } }
-    .filter { it != null }
+fun parseDocs() =
+    File(archivesDir).listFiles().asList().take(3)
+        .parallelStream()
+        .map { it.getHtmlFiles() }
+        .map { it.map { jDocToDoc(it.asHtmlDoc("${it.url}")) } }
+
+val docPath = "../links_with_context.csv"
 
 fun main() {
-    indexDocs("links_with_context.csv")
+    indexDocs()
 
-    println("Query took: " + measureTimeMillis { query("DataBuffer") } + " ms")
+    println("Query took: " + measureTimeMillis { query("BUFFER_FILE_EXTENSION") } + " ms")
 }
 
-private fun indexDocs(csv: String) {
-    IndexWriter(index, config).use { w ->
-        parseLinks(csv).map { jDocToDoc(it!!) }
-            .asSequence().take(10)
-            .forEach { w.addDoc(it); println("Indexed: ${it.contents}") }
-    }
+private fun indexDocs() {
+    val iw = IndexWriter(index, config)
+    parseDocs().forEach { it.forEach { iw.addDoc(it); println("Indexed: ${it.uri}") } }
 }
 
 private fun jDocToDoc(it: org.jsoup.nodes.Document): Doc {
@@ -76,19 +78,22 @@ fun query(querystr: String = "test") {
 
     // search
     val hitsPerPage = 10
-    DirectoryReader.open(index).use { reader ->
-        val searcher = IndexSearcher(reader)
-        val collector = TopScoreDocCollector.create(hitsPerPage, 10)
-        searcher.search(q, collector)
-        val hits = collector.topDocs().scoreDocs
+    val reader = DirectoryReader.open(index)
+    val searcher = IndexSearcher(reader)
+    val cs = searcher.collectionStatistics("contents")
+    val term = Term("contents", "browser")
+    val ts = searcher.termStatistics(term, TermStates.build(searcher.topReaderContext, term, true))
 
-        // display results
-        println("Found ${hits.size} hits.")
-        for (i in hits.indices) {
-            val docId = hits[i].doc
-            val d = searcher.doc(docId)
-            println((i + 1).toString() + ". " + d.get("title") + "\t" + d.get("uri"))
-        }
+    val collector = TopScoreDocCollector.create(hitsPerPage, 10)
+    searcher.search(q, collector)
+    val hits = collector.topDocs().scoreDocs
+
+    // display results
+    println("Found ${hits.size} hits.")
+    hits.forEachIndexed { i, scoreDoc ->
+        val docId = scoreDoc.doc
+        val d = searcher.doc(docId)
+        println((i + 1).toString() + ". " + d.get("title") + "\t" + d.get("uri"))
     }
 }
 
