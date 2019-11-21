@@ -10,11 +10,13 @@ version = "1.0-SNAPSHOT"
 
 repositories {
     mavenCentral()
+    jcenter()
 }
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
     implementation("org.jsoup:jsoup:1.12.1")
+    implementation("me.xdrop:fuzzywuzzy:1.2.0")
     implementation("com.google.guava:guava:28.1-jre")
     implementation("org.apache.commons:commons-compress:1.19")
     implementation("org.apache.commons:commons-vfs2:2.4.1")

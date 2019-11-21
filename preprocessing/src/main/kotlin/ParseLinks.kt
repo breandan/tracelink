@@ -1,3 +1,4 @@
+import me.xdrop.fuzzywuzzy.FuzzySearch
 import org.apache.commons.vfs2.AllFileSelector
 import org.apache.commons.vfs2.FileObject
 import org.apache.commons.vfs2.VFS
@@ -22,24 +23,25 @@ fun String.toFullPath() = "tgz:file://$archivesDir${this.substringBeforeLast("%"
  */
 
 data class Link(
-    val text: String,        // Anchor text of link itself
-    val context: String,     // Surrounding text on the same line
-    val from: String,        // Original document location
-    val to: String,          // Target document location
-    val linkFragment: String // Link fragment (indicating subsection)
+    val query: String,         // Anchor text of link itself
+    val context: String,      // Surrounding text on the same line
+    val from: String,         // Original document location
+    val to: String,           // Target document location
+    val linkFragment: String, // Link fragment (indicating subsection)
+    val targetHits: String
 ) {
-    constructor(
-        line: String, parsed: Array<String> = line.split("$dlm, $dlm")
+    constructor(line: String, parsed: Array<String> = line.split("$dlm, $dlm")
             .map { it.trim().replace(dlm, "") }.toTypedArray()
-    ) : this(parsed[0], parsed[1], parsed[2].toFullPath(), parsed[3].toFullPath(), parsed[4])
+    ) : this(parsed[0], parsed[1], parsed[2].toFullPath(), parsed[3].toFullPath(), parsed[4], parsed[5])
 
-    fun String.compact(prefixLength: Int = archivesDir.length + 11) = substring(prefixLength)
+    fun String.compact(prefixLength: Int = archivesAbs.length + 11) = substring(prefixLength)
 
     override fun toString(): String =
-        "$dlm${text}$dlm, $dlm${context}$dlm, $dlm${from.compact()}$dlm, $dlm${to.compact()}$dlm, $dlm${linkFragment}$dlm"
+        "$dlm${query}$dlm, $dlm${context}$dlm, $dlm${from.compact()}$dlm, $dlm${to.compact()}$dlm, $dlm${linkFragment}$dlm, $dlm${targetHits}$dlm"
 }
 
-val archivesDir: String = "/home/breandan/Desktop/kotlink/preprocessing/archives/" // Parent directory (assumed to contain `.tgz` files)
+val archivesDir: String = "archives/" // Parent directory (assumed to contain `.tgz` files)
+val archivesAbs: String = File(archivesDir).absolutePath
 
 /**
  * Extracts documents from archives in parallel and prints the links in CSV format.
@@ -47,14 +49,21 @@ val archivesDir: String = "/home/breandan/Desktop/kotlink/preprocessing/archives
 
 fun printLinks() {
     println("link_text, context, source_document, target_document")
-    File(archivesDir).listFiles()?.toList()?.parallelStream()?.forEach { file ->
-        try {
-            fetchLinks(file)?.forEach { it.forEach { it.forEach { link -> if (link != null) println(link) } } }
-        } catch (e: Exception) {
-            System.err.println("Error reading $file")
-            e.printStackTrace()
+    File(archivesDir).listFiles()?.toList()?.parallelStream()
+        ?.forEach { archive ->
+            try {
+                fetchLinks(archive)?.forEach { htmlLinkStream ->
+                    htmlLinkStream.forEach { linkStream ->
+                        linkStream.forEach { link ->
+                            if (link != null) println(link)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+//                System.err.println("Error reading $archive")
+//                e.printStackTrace()
+            }
         }
-    }
 }
 
 private fun FileObject.getLinksInFile() =
@@ -67,20 +76,19 @@ private fun FileObject.getLinksInFile() =
 private fun fetchLinks(archive: File) =
     archive.getHtmlFiles()?.map { it.getLinksInFile() }
 
-
 fun File.getHtmlFiles() =
     try {
         VFS.getManager().resolveFile("tgz:${absolutePath}")
             .findFiles(AllFileSelector()).asList().stream()
             .filter { it.name.extension.toString().let { ext -> ext == "htm" || ext == "html" } }
-    } catch(ex: Exception) {
+    } catch (ex: Exception) {
         null
     }
 
 //                                     LINK URI   FRAGMENT           ANCHOR TEXT
 val linkRegex = Regex("<a[^<>]*href=\"([^<>#:]*?)(#[^\"]*)?\"[^<>]*>([!-;?-~]{6,})</a>")
 val asciiRegex = Regex("[ -~]*")
-val window = 400
+val window = 255
 val minCtx = 8
 
 /**
@@ -103,21 +111,39 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link> =
                 val endIdx = (indexOfLinkText + linkText.length + window / 2).coerceAtMost(context.length)
                 val preText = context.substring(startIdx, indexOfLinkText)
                 val subText = context.substring(indexOfLinkText + linkText.length, endIdx)
-                if (resolvedLink.exists() && context.length > (linkText.length + minCtx) && context.matches(asciiRegex))
-                    Link(
-                        from = relativeTo.toString(),
-                        to = resolvedLink.toString(),
-                        linkFragment = fragment,
-                        text = linkText,
-                        context = "$preText <<LNK>> $subText"
-                    )
-                else null
+                val targetText = resolvedLink.asHtmlDoc("")?.text() ?: ""
+                if (targetText.isNotEmpty() && context.length > (linkText.length + minCtx) && context.matches(asciiRegex)) {
+                    val lines = targetText.split("\n")
+                    val hotlist = lines.filterForQuery(linkText)
+                    val matches = hotlist.joinToString(" … ")
+                    if (matches.isNotEmpty())
+                        Link(
+                            from = relativeTo.toString(),
+                            to = resolvedLink.toString(),
+                            linkFragment = fragment,
+                            query = linkText,
+                            context = "$preText <<LNK>> $subText",
+                            targetHits = matches
+                        ) else null
+                } else null
             } catch (e: Exception) {
                 null
             }
         }
     }
 
+fun String.getDocText() =
+    try {
+        VFS.getManager().resolveFile(this).asHtmlDoc("")?.text() ?: ""
+    } catch (ex: Exception) {
+        ""
+    }
+
+fun List<String>.filterForQuery(query: String): List<String> =
+    FuzzySearch.extractTop(query, this, 10, 80).map { it.string.substring((it.index - window).coerceAtLeast(0)..(it.index + query.length + window).coerceAtMost(it.string.length - 1)) }
+
 fun main() {
+//    println(listOf("carz", "[caro]", "rocarkas", "rcar car akasdf", "proca").filterForQuery("car"))
+
     printLinks()
 }
