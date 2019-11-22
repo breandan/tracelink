@@ -64,6 +64,7 @@ fun printLinks() {
 //                System.err.println("Error reading $archive")
 //                e.printStackTrace()
             }
+            System.err.println("Finished reading $archive")
         }
 }
 
@@ -86,8 +87,8 @@ fun File.getHtmlFiles() =
         null
     }
 
-//                                     LINK URI                FRAGMENT              ANCHOR TEXT
-val linkRegex = Regex("<a[^<>]*href=\"([^<>#:?\"]*?.[A-Za-z])(#[^<>#:?\"]*)?\"[^<>]*>([!-;?-~]{6,})</a>")
+//                                     LINK URI        FRAGMENT              ANCHOR TEXT
+val linkRegex = Regex("<a[^<>]*href=\"([^<>#:?\"]*?)(#[^<>#:?\"]*)?\"[^<>]*>([!-;?-~]{6,})</a>")
 val asciiRegex = Regex("[ -~]*")
 val window = 240
 val minCtx = 5
