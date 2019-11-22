@@ -1,20 +1,18 @@
 import org.apache.commons.vfs2.FileObject
-import org.apache.commons.vfs2.VFS
 import org.apache.lucene.analysis.standard.StandardAnalyzer
 import org.apache.lucene.document.Document
 import org.apache.lucene.document.Field.Store.YES
 import org.apache.lucene.document.TextField
-import org.apache.lucene.index.DirectoryReader
-import org.apache.lucene.index.IndexWriter
-import org.apache.lucene.index.IndexWriterConfig
-import org.apache.lucene.queryparser.classic.QueryParser
+import org.apache.lucene.index.*
+import org.apache.lucene.index.IndexWriterConfig.OpenMode.CREATE
+import org.apache.lucene.queryparser.classic.MultiFieldQueryParser
 import org.apache.lucene.search.IndexSearcher
+import org.apache.lucene.search.TermStatistics
 import org.apache.lucene.search.TopScoreDocCollector
 import org.apache.lucene.store.MMapDirectory
 import org.jsoup.parser.Parser
 import java.io.File
-import java.nio.charset.StandardCharsets
-import kotlin.streams.asSequence
+import java.nio.charset.StandardCharsets.UTF_8
 import kotlin.system.measureTimeMillis
 
 data class Doc(
@@ -26,32 +24,36 @@ data class Doc(
 }
 
 val analyzer = StandardAnalyzer()
-val index = MMapDirectory(File("test").toPath())
-val config = IndexWriterConfig(analyzer)
+val index = MMapDirectory(File("index").toPath())
+val config = IndexWriterConfig(analyzer).apply { setOpenMode(CREATE) }
 
-private fun FileObject.asHtmlDoc(uri: String) =
-    Parser.parse(content.inputStream.bufferedReader(StandardCharsets.UTF_8).lines().asSequence().joinToString(""), uri)
+fun FileObject.asHtmlDoc(uri: String) =
+    try {
+        Parser.parse(content.getString(UTF_8), uri)
+    } catch (e: Exception) {
+        null
+    }
 
-private fun Link.readDestination() =
-    VFS.getManager().resolveFile(to).asHtmlDoc("$to$linkFragment")
-
-fun parseLinks(file: String) = File(file)
-    .readLines().drop(5).parallelStream().map { Link(it) }
-    .map { try { it.readDestination() } catch (ex: Exception) { null } }
-    .filter { it != null }
+fun parseDocs() =
+    File(archivesDir).listFiles()!!.asList()
+        .parallelStream()
+        .map { it.getHtmlFiles()?.map { file -> file.asHtmlDoc("${file.url}")?.let { jDocToDoc(it) } } }
 
 fun main() {
-    indexDocs("links_with_context.csv")
+    indexDocs()
 
-    println("Query took: " + measureTimeMillis { query("DataBuffer") } + " ms")
+    println("Query took: " + measureTimeMillis { query("test") } + " ms")
 }
 
-private fun indexDocs(csv: String) {
-    IndexWriter(index, config).use { w ->
-        parseLinks(csv).map { jDocToDoc(it!!) }
-            .asSequence().take(10)
-            .forEach { w.addDoc(it); println("Indexed: ${it.contents}") }
+private fun indexDocs() {
+    var t = 0
+    val iw = IndexWriter(index, config)
+    parseDocs().forEach { docStream ->
+        docStream?.forEach { doc ->
+            doc?.run { iw.addDoc(this); t += 1; if (t % 1000 == 0) println("Indexed $uri") }
+        }
     }
+    iw.close()
 }
 
 private fun jDocToDoc(it: org.jsoup.nodes.Document): Doc {
@@ -72,24 +74,31 @@ private fun org.jsoup.nodes.Document.parseFragment(fragment: String): String? =
 fun query(querystr: String = "test") {
     // the "title" arg specifies the default field to use
     // when no field is explicitly specified in the query.
-    val q = QueryParser("title", analyzer).parse(querystr)
+    val q = MultiFieldQueryParser(arrayOf("title", "contents", "uri"), analyzer).parse(querystr)
 
     // search
-    val hitsPerPage = 10
-    DirectoryReader.open(index).use { reader ->
-        val searcher = IndexSearcher(reader)
-        val collector = TopScoreDocCollector.create(hitsPerPage, 10)
-        searcher.search(q, collector)
-        val hits = collector.topDocs().scoreDocs
+    val hitsPerPage = 9
+    val reader = DirectoryReader.open(index)
+    val searcher = IndexSearcher(reader)
 
-        // display results
-        println("Found ${hits.size} hits.")
-        for (i in hits.indices) {
-            val docId = hits[i].doc
-            val d = searcher.doc(docId)
-            println((i + 1).toString() + ". " + d.get("title") + "\t" + d.get("uri"))
-        }
+    val collector = TopScoreDocCollector.create(hitsPerPage, 10)
+    searcher.search(q, collector)
+    val hits = collector.topDocs().scoreDocs
+
+    // display results
+    println("Found ${hits.size} hits.")
+    hits.forEachIndexed { i, scoreDoc ->
+        val docId = scoreDoc.doc
+        val d = searcher.doc(docId)
+        println((i + 1).toString() + ". " + d.get("title") + "\t" + d.get("uri"))
     }
+    reader.close()
+}
+
+private fun IndexSearcher.getStats(term: String): TermStatistics? {
+    val cs = collectionStatistics("contents")
+    val tm = Term("contents", term)
+    return termStatistics(tm, TermStates.build(topReaderContext, tm, true))
 }
 
 private fun IndexWriter.addDoc(d: Doc) =
