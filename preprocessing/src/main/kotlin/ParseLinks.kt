@@ -57,26 +57,35 @@ fun printLinks() {
     File(archivesDir).listFiles()?.toList()?.parallelStream()
         ?.forEach { archive ->
             try {
-                fetchLinks(archive)?.forEach { htmlLinkStream ->
-                    htmlLinkStream.forEach { linkStream ->
-                        linkStream.forEach { link ->
-                            val hash = link.hashCode()
-                            if (link != null && hash !in previouslySeen) {
-                                previouslySeen.add(hash)
-                                println(link)
+                fetchLinks(archive)?.forEach { htmlLinkStream: Stream<Stream<Link?>?>? ->
+                    try {
+                        htmlLinkStream?.forEach { linkStream: Stream<Link?>? ->
+                            try {
+                                linkStream?.forEach { link: Link? ->
+                                    if (link != null) {
+                                        val hash = link.hashCode()
+                                        if (hash !in previouslySeenLinks) {
+                                            previouslySeenLinks.add(hash)
+                                            println(link)
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+//                                System.err.println("Error reading stream $e")
                             }
                         }
+                    } catch (e: Exception) {
+//                        System.err.println("Error reading linkStream $e")
                     }
                 }
             } catch (e: Exception) {
-//                System.err.println("Error reading $archive")
-//                e.printStackTrace()
+//                System.err.println("Error reading $archive: $e")
             }
-            System.err.println("Finished reading $archive")
+//            System.err.println("Finished reading $archive")
         }
 }
 
-private fun FileObject.getLinksInFile() =
+private fun FileObject.getLinksInFile(): Stream<Stream<Link?>?>? =
     content.inputStream.bufferedReader(UTF_8).lines().map { line -> line.getAllLinks(relativeTo = this) }
 
 /**
@@ -86,7 +95,7 @@ private fun FileObject.getLinksInFile() =
 private fun fetchLinks(archive: File) =
     archive.getHtmlFiles()?.map { it.getLinksInFile() }
 
-fun File.getHtmlFiles() =
+fun File.getHtmlFiles(): Stream<FileObject>? =
     try {
         VFS.getManager().resolveFile("tgz:${absolutePath}")
             .findFiles(AllFileSelector()).asList().stream()
@@ -100,7 +109,7 @@ val linkRegex = Regex("<a[^<>]*href=\"([^<>#:?\"]*?)(#[^<>#:?\"]*)?\"[^<>]*>([!-
 val asciiRegex = Regex("[ -~]*")
 val window = 3
 val minCtx = 5
-val previouslySeen = ConcurrentHashMap.newKeySet<Int>()
+val previouslySeenLinks = ConcurrentHashMap.newKeySet<Int>()
 
 /**
  * Returns all HTML links within a string whose anchor text is shorter than the string
@@ -109,7 +118,7 @@ val previouslySeen = ConcurrentHashMap.newKeySet<Int>()
  * to a document path, and validated so that all links returned point to a valid URL.
  */
 
-private fun String.getAllLinks(relativeTo: FileObject): Stream<Link> =
+private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
     linkRegex.findAll(this).asStream().map { result ->
         result.destructured.let { regexGroups ->
             try {
