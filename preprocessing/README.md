@@ -22,3 +22,11 @@ The following regular expression was used to extract links on a [per-line](https
 ```
 
 All links are validated and point to a known document in the same docset.
+
+## Deduplication procedure
+
+Links with identical source and target context, pointing to the same target URL are considered duplicates:
+
+```
+q -t -H -U "select link_text, context, target_context, target_document, link_fragment from tabs_no_quotes.csv group by link_text, context, target_context, target_document, link_fragment" > deduped.csv
+```
