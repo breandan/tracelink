@@ -87,10 +87,10 @@ fun File.getHtmlFiles() =
         null
     }
 
-//                                     LINK URI        FRAGMENT              ANCHOR TEXT
+//                                      LINK URI       FRAGMENT              ANCHOR TEXT
 val linkRegex = Regex("<a[^<>]*href=\"([^<>#:?\"]*?)(#[^<>#:?\"]*)?\"[^<>]*>([!-;?-~]{6,})</a>")
 val asciiRegex = Regex("[ -~]*")
-val window = 240
+val window = 3
 val minCtx = 5
 
 /**
@@ -106,7 +106,7 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link> =
             try {
                 val targetUri = regexGroups.component1().let {
                     // Support self-links to the same page where link occurs
-                    if(it.isEmpty()) relativeTo.name.baseName else it
+                    if (it.isEmpty()) relativeTo.name.baseName else it
                 }
                 val resolvedLink = relativeTo.parent.resolveFile(targetUri)
                 val linkText = Parser.parse(regexGroups.component3(), "")!!.text()!!
@@ -139,15 +139,14 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link> =
                         ) else null
                 } else null
             } catch (e: Exception) {
+                e.printStackTrace()
                 null
             }
         }
     }
 
 fun List<String>.filterForQuery(query: String): List<String> =
-    FuzzySearch.extractTop(query, this, 30, 60).map {
-        it.string.substring((it.index - window).coerceAtLeast(0)..(it.index + query.length + window).coerceAtMost(it.string.length - 1)).trim()
-    }
+    FuzzySearch.extractTop(query, this, 30, 60).map { it.string }
 
 fun main() {
     printLinks()
