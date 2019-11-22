@@ -81,7 +81,7 @@ fun printLinks() {
             } catch (e: Exception) {
 //                System.err.println("Error reading $archive: $e")
             }
-//            System.err.println("Finished reading $archive")
+            System.err.println("Finished reading $archive")
         }
 }
 
