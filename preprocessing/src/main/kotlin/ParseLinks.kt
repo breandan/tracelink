@@ -157,7 +157,6 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
                         ) else null
                 } else null
             } catch (e: Exception) {
-                e.printStackTrace()
                 null
             }
         }
