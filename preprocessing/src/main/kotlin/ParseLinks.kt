@@ -30,7 +30,8 @@ data class Link(
     val linkFragment: String, // Link fragment (indicating subsection)
     val fuzzyHits: String
 ) {
-    constructor(line: String, parsed: Array<String> = line.split("$dlm, $dlm")
+    constructor(
+        line: String, parsed: Array<String> = line.split("$dlm, $dlm")
             .map { it.trim().replace(dlm, "") }.toTypedArray()
     ) : this(parsed[0], parsed[1], parsed[2], parsed[3].toFullPath(), parsed[4].toFullPath(), parsed[5])
 
@@ -85,8 +86,8 @@ fun File.getHtmlFiles() =
         null
     }
 
-//                                     LINK URI   FRAGMENT           ANCHOR TEXT
-val linkRegex = Regex("<a[^<>]*href=\"([^<>#:]*?)(#[^\"]*)?\"[^<>]*>([!-;?-~]{6,})</a>")
+//                                     LINK URI                FRAGMENT              ANCHOR TEXT
+val linkRegex = Regex("<a[^<>]*href=\"([^<>#:?\"]*?.[A-Za-z])(#[^<>#:?\"]*)?\"[^<>]*>([!-;?-~]{6,})</a>")
 val asciiRegex = Regex("[ -~]*")
 val window = 240
 val minCtx = 5
@@ -102,7 +103,11 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link> =
     linkRegex.findAll(this).asStream().map { result ->
         result.destructured.let { regexGroups ->
             try {
-                val resolvedLink = relativeTo.parent.resolveFile(regexGroups.component1())
+                val targetUri = regexGroups.component1().let {
+                    // Support self-links to the same page where link occurs
+                    if(it.isEmpty()) relativeTo.name.baseName else it
+                }
+                val resolvedLink = relativeTo.parent.resolveFile(targetUri)
                 val linkText = Parser.parse(regexGroups.component3(), "")!!.text()!!
                 val context = Parser.parse(this, "")!!.text()!!
                 val fragment = regexGroups.component2()
@@ -111,7 +116,13 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link> =
                 val endIdx = (indexOfLinkText + linkText.length + window / 2).coerceAtMost(context.length)
                 val preText = context.substring(startIdx, indexOfLinkText)
                 val subText = context.substring(indexOfLinkText + linkText.length, endIdx)
-                val targetText = resolvedLink.asHtmlDoc("")?.text() ?: ""
+                val targetText = resolvedLink.asHtmlDoc(resolvedLink.url.path)?.text() ?: ""
+//                            .also {
+//                            println("${regexGroups.component1()}, ${regexGroups.component2()}, ${regexGroups.component3()}, ${relativeTo} ... ${this@getAllLinks}")
+//                            println("${regexGroups.component1()} has files in dir: ${resolvedLink.getChildren().map {
+//                        it.getName().baseName
+//                    }.joinToString(", ")} ") }
+
                 if (targetText.isNotEmpty() && context.length > (linkText.length + minCtx) && context.matches(asciiRegex)) {
                     val lines = targetText.split("\n")
                     val hitList = lines.filterForQuery(linkText)
@@ -133,7 +144,9 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link> =
     }
 
 fun List<String>.filterForQuery(query: String): List<String> =
-    FuzzySearch.extractTop(query, this, 30, 60).map { it.string.substring((it.index - window).coerceAtLeast(0)..(it.index + query.length + window).coerceAtMost(it.string.length - 1)).trim() }
+    FuzzySearch.extractTop(query, this, 30, 60).map {
+        it.string.substring((it.index - window).coerceAtLeast(0)..(it.index + query.length + window).coerceAtMost(it.string.length - 1)).trim()
+    }
 
 fun main() {
     printLinks()
