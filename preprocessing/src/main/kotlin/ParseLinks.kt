@@ -5,6 +5,7 @@ import org.apache.commons.vfs2.VFS
 import org.jsoup.parser.Parser
 import java.io.File
 import java.nio.charset.StandardCharsets.UTF_8
+import java.util.concurrent.ConcurrentHashMap
 import java.util.stream.Stream
 import kotlin.streams.asStream
 
@@ -24,11 +25,11 @@ fun String.toFullPath() = "tgz:file://$archivesDir${this.substringBeforeLast("%"
 
 data class Link(
     val query: String,         // Anchor text of link itself
-    val context: String,      // Surrounding text on the same line
-    val fromUri: String,         // Original document location
-    val toUri: String,           // Target document location
-    val linkFragment: String, // Link fragment (indicating subsection)
-    val fuzzyHits: String
+    val context: String,       // Surrounding text on the same line
+    val fuzzyHits: String,     // Hits and surrounding context in target doc
+    val fromUri: String,       // Original document location
+    val toUri: String,         // Target document location
+    val linkFragment: String   // Link fragment (indicating subsection)
 ) {
     constructor(
         line: String, parsed: Array<String> = line.split("$dlm, $dlm")
@@ -39,6 +40,8 @@ data class Link(
 
     override fun toString(): String =
         "$dlm${query}$dlm, $dlm${context}$dlm, $dlm${fuzzyHits}$dlm, $dlm${fromUri.compact()}$dlm, $dlm${toUri.compact()}$dlm, $dlm${linkFragment}$dlm"
+
+    override fun hashCode() = (query + context + fuzzyHits + toUri + linkFragment).hashCode()
 }
 
 val archivesDir: String = "archives/" // Parent directory (assumed to contain `.tgz` files)
@@ -56,7 +59,11 @@ fun printLinks() {
                 fetchLinks(archive)?.forEach { htmlLinkStream ->
                     htmlLinkStream.forEach { linkStream ->
                         linkStream.forEach { link ->
-                            if (link != null) println(link)
+                            val hash = link.hashCode()
+                            if (link != null && hash !in previouslySeen) {
+                                previouslySeen.add(hash)
+                                println(link)
+                            }
                         }
                     }
                 }
@@ -92,6 +99,7 @@ val linkRegex = Regex("<a[^<>]*href=\"([^<>#:?\"]*?)(#[^<>#:?\"]*)?\"[^<>]*>([!-
 val asciiRegex = Regex("[ -~]*")
 val window = 3
 val minCtx = 5
+val previouslySeen = ConcurrentHashMap.newKeySet<Int>()
 
 /**
  * Returns all HTML links within a string whose anchor text is shorter than the string
