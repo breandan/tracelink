@@ -1,7 +1,7 @@
 import json
 import os
 
-import requests
+import urllib.request
 import gzip
 import io
 
@@ -13,11 +13,9 @@ def download_docs():
         for p in data['docsets']:
             archive = data['docsets'][p]['archive']
             url = 'http://newyork.kapeli.com/feeds/zzz/user_contributed/build/' + p + '/' + archive
-            response = requests.get(url, timeout=50)
-            if response.status_code == 200:
-                with open('archives/' + archive, 'wb') as f:
-                    f.write(response.content)
-                    print('Downloaded: ' + archive)
+            with urllib.request.urlopen(url) as response, open('archives/' + archive, 'wb') as out_file:
+                out_file.write(response.read())
+                print('Downloaded: ' + archive)
 
 if __name__ == '__main__':
     download_docs()
