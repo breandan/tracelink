@@ -13,7 +13,6 @@ import kotlin.streams.asStream
  * Intended to be called from the command line, e.g. `./gradlew run > file.csv`
  */
 
-val dlm = "\"\"\""
 
 fun String.toFullPath() = "tgz:file://$archivesDir${this.substringBeforeLast("%")}"
 
@@ -32,17 +31,19 @@ data class Link(
     val linkFragment: String   // Link fragment (indicating subsection)
 ) {
     constructor(
-        line: String, parsed: Array<String> = line.split("$dlm, $dlm")
-            .map { it.trim().replace(dlm, "") }.toTypedArray()
+        line: String, parsed: Array<String> = line.split("\t")
+            .map { it.trim() }.toTypedArray()
     ) : this(parsed[0], parsed[1], parsed[2], parsed[3].toFullPath(), parsed[4].toFullPath(), parsed[5])
 
     fun String.compact(prefixLength: Int = archivesAbs.length + 11) = substring(prefixLength)
 
     override fun toString(): String =
-        "$dlm${query}$dlm, $dlm${context}$dlm, $dlm${fuzzyHits}$dlm, $dlm${fromUri.compact()}$dlm, $dlm${toUri.compact()}$dlm, $dlm${linkFragment}$dlm"
+        "${query.noTabs()}\t${context.noTabs()}$\t${fuzzyHits.noTabs()}$\t${fromUri.compact()}$\t${toUri.compact()}$\t${linkFragment}$"
 
     override fun hashCode() = (query + context + fuzzyHits + toUri + linkFragment).hashCode()
 }
+
+fun String.noTabs() = this.replace("\t", "")
 
 val archivesDir: String = "archives/" // Parent directory (assumed to contain `.tgz` files)
 val archivesAbs: String = File(archivesDir).absolutePath
@@ -52,7 +53,7 @@ val archivesAbs: String = File(archivesDir).absolutePath
  */
 
 fun printLinks() {
-    println("link_text, context, target_context, source_document, target_document, link_fragment")
+    println("link_text\tcontext\ttarget_context\tsource_document\ttarget_document\tlink_fragment")
     File(archivesDir).listFiles()?.toList()?.parallelStream()
         ?.forEach { archive ->
             try {
@@ -154,7 +155,7 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link> =
     }
 
 fun List<String>.filterForQuery(query: String): List<String> =
-    FuzzySearch.extractTop(query, this, 30, 60).map { it.string }
+    FuzzySearch.extractTop(query, this, 30, 60).map { it.string.trim() }
 
 fun main() {
     printLinks()
