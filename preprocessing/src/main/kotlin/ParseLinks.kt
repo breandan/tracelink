@@ -14,9 +14,6 @@ import kotlin.streams.asStream
  * Intended to be called from the command line, e.g. `./gradlew run > file.csv`
  */
 
-
-fun String.toFullPath() = "tgz:file://$archivesDir${this.substringBeforeLast("%")}"
-
 /**
  * Class representing an HTML link which the document's author saw fit to reference
  * another page in the same doc set. The following features are the minimal set of
@@ -26,11 +23,11 @@ fun String.toFullPath() = "tgz:file://$archivesDir${this.substringBeforeLast("%"
 data class Link(
     val query: String,         // Anchor text of link itself
     val context: String,       // Surrounding text on the same line
-    val title: String,         // Title of the target document
-    val targetContext: String,     // Hits and surrounding context in target doc
+    val targetTitle: String,   // Title of the target document
+    val targetContext: String, // Hits and surrounding context in target doc
     val fromUri: String,       // Original document location
     val toUri: String,         // Target document location
-    val linkFragment: String   // Link fragment (indicating subsection)
+    val uriFragment: String    // Link fragment (indicating subsection)
 ) {
     constructor(
         line: String, parsed: Array<String> = line.split("\t")
@@ -40,9 +37,9 @@ data class Link(
     private fun String.compact(prefixLength: Int = archivesAbs.length + 11) = substring(prefixLength)
 
     override fun toString(): String =
-        "${query.noTabs()}\t${context.noTabs()}\t${title.noTabs()}\t${targetContext.noTabs()}\t${fromUri.compact()}\t${toUri.compact()}\t${linkFragment}"
+        "${query.noTabs()}\t${targetTitle.noTabs()}\t${context.noTabs()}\t${targetContext.noTabs()}\t${fromUri.compact()}\t${toUri.compact()}\t${uriFragment}"
 
-    override fun hashCode() = (query + context + targetContext + toUri + linkFragment).hashCode()
+    override fun hashCode() = (query + context + targetContext + toUri + uriFragment).hashCode()
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -54,11 +51,13 @@ data class Link(
         if (context != other.context) return false
         if (targetContext != other.targetContext) return false
         if (toUri != other.toUri) return false
-        if (linkFragment != other.linkFragment) return false
+        if (uriFragment != other.uriFragment) return false
 
         return true
     }
 }
+
+fun String.toFullPath() = "tgz:file://$archivesDir${this.substringBeforeLast("%")}"
 
 fun String.noTabs() = this.replace("\t", "  ")
 
@@ -70,7 +69,7 @@ val archivesAbs: String = File(archivesDir).absolutePath
  */
 
 fun printLinks() {
-    println("link_text\tcontext\ttarget_title\ttarget_context\tsource_document\ttarget_document\tlink_fragment")
+    println("link_text\ttarget_title\tcontext\ttarget_context\tsource_document\ttarget_document\tlink_fragment")
     File(archivesDir).listFiles()?.toList()?.sortedBy { it.name }?.parallelStream()
         ?.forEach { archive ->
             try {
@@ -148,7 +147,7 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
                 val linkText = Parser.parse(regexGroups.component3(), "")!!.text()!!
                 val context = Parser.parse(this, "")!!.text()!!
                 if (context.length > (linkText.length + minCtx) && context.matches(asciiRegex)) {
-                    val fragment = regexGroups.component2()
+                    val fragment = regexGroups.component2().trim()
                     val indexOfLinkText = context.indexOf(linkText)
                     val startIdx = (indexOfLinkText - window / 2).coerceAtLeast(0)
                     val endIdx = (indexOfLinkText + linkText.length + window / 2).coerceAtMost(context.length)
@@ -162,11 +161,11 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
                         Link(
                             fromUri = relativeTo.toString(),
                             toUri = resolvedLink.toString(),
-                            linkFragment = fragment,
+                            uriFragment = fragment,
                             query = linkText,
                             context = "$preText <<LNK>> $subText",
                             targetContext = targetDocText,
-                            title = targetDocTitle
+                            targetTitle = targetDocTitle
                         )
                     } else null
                 } else null
