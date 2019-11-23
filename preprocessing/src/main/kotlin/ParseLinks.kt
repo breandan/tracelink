@@ -38,7 +38,7 @@ data class Link(
     fun String.compact(prefixLength: Int = archivesAbs.length + 11) = substring(prefixLength)
 
     override fun toString(): String =
-        "${query.noTabs()}\t${context.noTabs()}\t${fuzzyHits.noTabs()}\t${fromUri.compact()}\t${toUri.compact()}\t${linkFragment}$"
+        "${query.noTabs()}\t${context.noTabs()}\t${fuzzyHits.noTabs()}\t${fromUri.compact()}\t${toUri.compact()}\t${linkFragment}"
 
     override fun hashCode() = (query + context + fuzzyHits + toUri + linkFragment).hashCode()
 }
