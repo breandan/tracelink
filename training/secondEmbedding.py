@@ -24,13 +24,15 @@ model.eval()     #switch to eval mode (remove things like dropout)
 model.to('cuda')    #Put the model on the gpu:
 
 #Restrict for testing:
-restrictSize = 26875
+restrictSize = 1000
 ###Loading of the Data:
-data = pd.read_csv("deduped.csv",sep="\t")
+data = pd.read_csv("data3\exact_hits.csv",sep="\t",nrows=restrictSize)
+print(data.columns)
 link_text_data = data.values[:restrictSize,0]
 link_context_data = data.values[:restrictSize,1]
 target_context_data = data.values[:restrictSize,2]
-target_link_data = data.values[:restrictSize,3]
+target_link_data = data.values[:restrictSize,4]
+
 # Note: Bert max input sequence is 512 we can get it through:
 max_model_input_size = tokenizer.max_model_input_sizes['bert-base-uncased']
 def tokenize(data):
@@ -70,8 +72,8 @@ target_context_tokenID_padded = [c+[0 for _ in range(pad_dim-len(c))] for c in t
 
 # Now we proceed to BERT embedding
 toEmbed = [link_text_tokenID_padded,link_context_tokenID_padded,target_context_tokenID_padded]
-saveNames = [os.path.join("embedding","link_text.csv"),os.path.join("embedding","link_context.csv"),os.path.join("embedding","target_context.csv")]
-mini_batch_sizes = [200,20,1]
+saveNames = [os.path.join("data3","link_text.csv"),os.path.join("data3","link_context.csv"),os.path.join("data3","target_context.csv")]
+mini_batch_sizes = [20,20,1]
 embeddings = []
 for idx,source in enumerate(toEmbed):
     text_tensor = torch.tensor(source)
@@ -88,59 +90,5 @@ for idx,source in enumerate(toEmbed):
     save_link_text_outputs.to_csv(saveNames[idx])
     embeddings += [save_link_text_outputs]
 
-from sklearn.decomposition import PCA
-from sklearn.cross_decomposition import CCA
-from sklearn.manifold import TSNE
 
-cca = CCA(n_components=2)
-cca.fit(embeddings[1],embeddings[2])
-X_c,Y_c = cca.transform(embeddings[1],embeddings[2])
-
-import matplotlib.pyplot as plt
-plt.scatter(X_c[:,0],X_c[:,1],c="blue",label="link_context")
-plt.scatter(Y_c[:,0],Y_c[:,1],c="orange",label="doc_target")
-plt.show()
-
-from matplotlib.cm import get_cmap
-cm = get_cmap('hsv')
-#Now we cluster by target database, just to observe if it is reflected:
-target_names = np.array([str(c).split(".tgz!")[0] for c in target_link_data])
-target_names_unique = np.unique(target_names)[:-4]
-hist = []
-for idx,base in enumerate(target_names_unique):
-    hist+= [sum(np.where(target_names==base,1,0))]
-print(hist)
-plt.bar(range(0,len(hist)),np.log(hist),color=cm(np.arange(0,len(hist))/len(hist)),width=0.8)
-plt.xticks(range(0,len(hist)), target_names_unique, rotation='vertical')
-plt.show()
-#We observe that the vast majority of data comes from the Haskell directory, let us refine our analysis on it
-embeddings_Haskell_X = embeddings[1].values[np.where(target_names==target_names_unique[95])]
-embeddings_Haskell_Y = embeddings[2].values[np.where(target_names==target_names_unique[95])]
-target_link_data_Haskell = target_link_data[np.where(target_names==target_names_unique[95])]
-
-cca = CCA(n_components=2)
-cca.fit(embeddings_Haskell_X,embeddings_Haskell_Y)
-X_c_data_Haskell ,Y_c_data_Haskell = cca.transform(embeddings_Haskell_X,embeddings_Haskell_Y)
-plt.scatter(X_c_data_Haskell[:,0],X_c_data_Haskell[:,1],label="link_context",c="red")
-plt.scatter(Y_c_data_Haskell[:,0],Y_c_data_Haskell[:,1],label="target_context",c="blue",marker="x")
-plt.show()
-#We observe that the file are organized as:
-#'/Haskell.tgz!/Haskell.docset/Contents/Resources/Documents/libraries/
-#So we will separate the libraries from Haskell parts
-target_names_data_Haskell = np.array([str(c).split("/Haskell.tgz!/Haskell.docset/Contents/Resources/Documents/libraries/")[1].split("/")[0] for c in target_link_data_Haskell])
-target_names_unique_data_Haskell = np.unique(target_names_data_Haskell)[:-4]
-hist = []
-for idx,base in enumerate(target_names_unique_data_Haskell):
-    hist+= [sum(np.where(target_names_data_Haskell==base,1,0))]
-print(hist)
-plt.bar(range(0,len(hist)),hist,color=cm(np.arange(0,len(hist))/len(hist)),width=0.8)
-plt.xticks(range(0,len(hist)), target_names_unique, rotation='vertical')
-plt.show()
-
-for idx,base in enumerate(target_names_unique_data_Haskell):
-    X_c_data_Haskell_reduce = X_c_data_Haskell[np.where(target_names_data_Haskell==base)]
-    Y_c_data_Haskell_reduce = Y_c_data_Haskell[np.where(target_names_data_Haskell==base)]
-    plt.scatter(X_c_data_Haskell_reduce[:,0],X_c_data_Haskell_reduce[:,1],label="link_context",c=cm(idx/len(hist)))
-    plt.scatter(Y_c_data_Haskell_reduce[:,0],Y_c_data_Haskell_reduce[:,1],label="target_context",c=cm(idx/len(hist)),marker="x")
-plt.show()
 
