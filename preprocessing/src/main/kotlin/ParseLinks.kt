@@ -166,7 +166,7 @@ fun List<String>.filterForQuery(query: String, exact: Boolean, widw: Int = windo
     if(exact)
         map { line ->
             Regex(Regex.escape(query)).findAll(line).map { mr ->
-                line.substring((mr.range.first - widw).coerceAtLeast(0), (mr.range.last + widw).coerceAtMost(line.length))
+                line.substring((mr.range.first - widw).coerceAtLeast(0), (mr.range.last + widw).coerceAtMost(line.length)).trim()
             }
         }.asSequence().flatten().take(30)
     else FuzzySearch.extractTop(query, this, 30, 60).map { it.string.trim() }.asSequence()
