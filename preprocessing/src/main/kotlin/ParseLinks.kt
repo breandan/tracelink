@@ -162,13 +162,15 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
         }
     }
 
-fun List<String>.filterForQuery(query: String, exact: Boolean): Sequence<String> =
-    if(exact) FuzzySearch.extractTop(query, this, 30, 60).map { it.string.trim() }.asSequence()
-    else map { line ->
-        Regex(Regex.escape(query)).findAll(line).map {
-            line.substring((it.range.first - window).coerceAtLeast(0), (it.range.last + window).coerceAtMost(query.length - 1))
-        }
-    }.asSequence().flatten()
+fun List<String>.filterForQuery(query: String, exact: Boolean, widw: Int = window): Sequence<String> =
+    if(exact)
+        map { line ->
+            Regex(Regex.escape(query)).findAll(line).map { mr ->
+                println(mr.range)
+                line.substring((mr.range.first - widw).coerceAtLeast(0), (mr.range.last + widw).coerceAtMost(line.length))
+            }
+        }.asSequence().flatten()
+    else FuzzySearch.extractTop(query, this, 30, 60).map { it.string.trim() }.asSequence()
 
 fun main() {
     printLinks()
