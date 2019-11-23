@@ -2,6 +2,7 @@ import me.xdrop.fuzzywuzzy.FuzzySearch
 import org.apache.commons.vfs2.AllFileSelector
 import org.apache.commons.vfs2.FileObject
 import org.apache.commons.vfs2.VFS
+import org.jsoup.nodes.Document
 import org.jsoup.parser.Parser
 import java.io.File
 import java.nio.charset.StandardCharsets.UTF_8
@@ -25,7 +26,8 @@ fun String.toFullPath() = "tgz:file://$archivesDir${this.substringBeforeLast("%"
 data class Link(
     val query: String,         // Anchor text of link itself
     val context: String,       // Surrounding text on the same line
-    val fuzzyHits: String,     // Hits and surrounding context in target doc
+    val title: String,         // Title of the target document
+    val targetContext: String,     // Hits and surrounding context in target doc
     val fromUri: String,       // Original document location
     val toUri: String,         // Target document location
     val linkFragment: String   // Link fragment (indicating subsection)
@@ -33,14 +35,14 @@ data class Link(
     constructor(
         line: String, parsed: Array<String> = line.split("\t")
             .map { it.trim() }.toTypedArray()
-    ) : this(parsed[0], parsed[1], parsed[2], parsed[3].toFullPath(), parsed[4].toFullPath(), parsed[5])
+    ) : this(parsed[0], parsed[1], parsed[2], parsed[3], parsed[4].toFullPath(), parsed[5].toFullPath(), parsed[6])
 
     private fun String.compact(prefixLength: Int = archivesAbs.length + 11) = substring(prefixLength)
 
     override fun toString(): String =
-        "${query.noTabs()}\t${context.noTabs()}\t${fuzzyHits.noTabs()}\t${fromUri.compact()}\t${toUri.compact()}\t${linkFragment}"
+        "${query.noTabs()}\t${context.noTabs()}\t${title.noTabs()}\t${targetContext.noTabs()}\t${fromUri.compact()}\t${toUri.compact()}\t${linkFragment}"
 
-    override fun hashCode() = (query + context + fuzzyHits + toUri + linkFragment).hashCode()
+    override fun hashCode() = (query + context + targetContext + toUri + linkFragment).hashCode()
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -50,7 +52,7 @@ data class Link(
 
         if (query != other.query) return false
         if (context != other.context) return false
-        if (fuzzyHits != other.fuzzyHits) return false
+        if (targetContext != other.targetContext) return false
         if (toUri != other.toUri) return false
         if (linkFragment != other.linkFragment) return false
 
@@ -68,7 +70,7 @@ val archivesAbs: String = File(archivesDir).absolutePath
  */
 
 fun printLinks() {
-    println("link_text\tcontext\ttarget_context\tsource_document\ttarget_document\tlink_fragment")
+    println("link_text\tcontext\ttarget_title\ttarget_context\tsource_document\ttarget_document\tlink_fragment")
     File(archivesDir).listFiles()?.toList()?.sortedBy { it.name }?.parallelStream()
         ?.forEach { archive ->
             try {
@@ -152,20 +154,20 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
                     val endIdx = (indexOfLinkText + linkText.length + window / 2).coerceAtMost(context.length)
                     val preText = context.substring(startIdx, indexOfLinkText)
                     val subText = context.substring(indexOfLinkText + linkText.length, endIdx)
-                    val targetDocText = resolvedLink.asHtmlDoc(resolvedLink.url.path)?.text() ?: ""
+                    val targetDoc = resolvedLink.asHtmlDoc(resolvedLink.url.path)
+                    val targetDocText = targetDoc?.extractLinkText(linkText, fragment, true) ?: ""
+                    val targetDocTitle = targetDoc?.title() ?: ""
 
                     if (targetDocText.isNotEmpty()) {
-                        val matches = targetDocText.extractHits(linkText, true)
-                        if (matches.isNotEmpty())
-                            Link(
-                                fromUri = relativeTo.toString(),
-                                toUri = resolvedLink.toString(),
-                                linkFragment = fragment,
-                                query = linkText,
-                                context = "$preText <<LNK>> $subText",
-                                fuzzyHits = matches
-                            )
-                        else null
+                        Link(
+                            fromUri = relativeTo.toString(),
+                            toUri = resolvedLink.toString(),
+                            linkFragment = fragment,
+                            query = linkText,
+                            context = "$preText <<LNK>> $subText",
+                            targetContext = targetDocText,
+                            title = targetDocTitle
+                        )
                     } else null
                 } else null
             } catch (e: Exception) {
@@ -174,19 +176,27 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
         }
     }
 
-private fun String.extractHits(query: String, exact: Boolean, bufferLen: Int = window): String =
-    split("\n").run {
-        if (exact)
-            map { line ->
-                Regex(Regex.escape(query)).findAll(line).map { mr ->
-                    line.substring(
-                        (mr.range.first - bufferLen).coerceAtLeast(0),
-                        (mr.range.last + bufferLen).coerceAtMost(line.length)
-                    ).trim()
-                }
-            }.asSequence().flatten().take(30)
-        else FuzzySearch.extractTop(query, this, 30, 60).map { it.string.trim() }.asSequence()
-    }.joinToString(" … ")
+fun Document.extractLinkText(query: String, fragment: String, isLiteral: Boolean, bufferLen: Int = window): String =
+    (if (fragment.isNotEmpty()) extractFragmentText(fragment) else body().text())
+        .split("\n").run {
+            if (isLiteral) extractLiteralHits(query, bufferLen)
+            else FuzzySearch.extractTop(query, this, 30, 60).map { it.string.trim() }.asSequence()
+        }.joinToString(" … ")
 
+fun List<String>.extractLiteralHits(query: String, bufferLen: Int): Sequence<String> = map { line ->
+    Regex(Regex.escape(query)).findAll(line).map { mr ->
+        line.substring(
+            (mr.range.first - bufferLen).coerceAtLeast(0),
+            (mr.range.last + bufferLen).coerceAtMost(line.length)
+        ).trim()
+    }
+}.asSequence().flatten().take(30)
+
+private fun Document.extractFragmentText(fragment: String) =
+    select(fragment)?.first()?.parents()
+        ?.firstOrNull { it.siblingElements().isNotEmpty() }
+        ?.nextElementSiblings()
+        ?.takeWhile { !it.hasAttr("id") }
+        ?.joinToString("") { it.text() } ?: body().text()
 
 fun main() = printLinks()
