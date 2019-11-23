@@ -38,12 +38,12 @@ data class Link(
     fun String.compact(prefixLength: Int = archivesAbs.length + 11) = substring(prefixLength)
 
     override fun toString(): String =
-        "${query.noTabs()}\t${context.noTabs()}$\t${fuzzyHits.noTabs()}$\t${fromUri.compact()}$\t${toUri.compact()}$\t${linkFragment}$"
+        "${query.noTabs()}\t${context.noTabs()}\t${fuzzyHits.noTabs()}\t${fromUri.compact()}\t${toUri.compact()}\t${linkFragment}$"
 
     override fun hashCode() = (query + context + fuzzyHits + toUri + linkFragment).hashCode()
 }
 
-fun String.noTabs() = this.replace("\t", "")
+fun String.noTabs() = this.replace("\t", "  ")
 
 val archivesDir: String = "archives/" // Parent directory (assumed to contain `.tgz` files)
 val archivesAbs: String = File(archivesDir).absolutePath
@@ -107,7 +107,7 @@ fun File.getHtmlFiles(): Stream<FileObject>? =
 //                                      LINK URI       FRAGMENT              ANCHOR TEXT
 val linkRegex = Regex("<a[^<>]*href=\"([^<>#:?\"]*?)(#[^<>#:?\"]*)?\"[^<>]*>([!-;?-~]{6,})</a>")
 val asciiRegex = Regex("[ -~]*")
-val window = 3
+val window = 240
 val minCtx = 5
 val previouslySeenLinks = ConcurrentHashMap.newKeySet<Int>()
 
@@ -144,7 +144,7 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
 
                 if (targetText.isNotEmpty() && context.length > (linkText.length + minCtx) && context.matches(asciiRegex)) {
                     val lines = targetText.split("\n")
-                    val hitList = lines.filterForQuery(linkText)
+                    val hitList = lines.filterForQuery(linkText, true)
                     val matches = hitList.joinToString(" … ")
                     if (matches.isNotEmpty())
                         Link(
@@ -162,8 +162,13 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
         }
     }
 
-fun List<String>.filterForQuery(query: String): List<String> =
-    FuzzySearch.extractTop(query, this, 30, 60).map { it.string.trim() }
+fun List<String>.filterForQuery(query: String, exact: Boolean): Sequence<String> =
+    if(exact) FuzzySearch.extractTop(query, this, 30, 60).map { it.string.trim() }.asSequence()
+    else map { line ->
+        Regex(Regex.escape(query)).findAll(line).map {
+            line.substring((it.range.first - window).coerceAtLeast(0), (it.range.last + window).coerceAtMost(query.length - 1))
+        }
+    }.asSequence().flatten()
 
 fun main() {
     printLinks()
