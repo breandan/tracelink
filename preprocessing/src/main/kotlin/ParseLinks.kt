@@ -35,15 +35,30 @@ data class Link(
             .map { it.trim() }.toTypedArray()
     ) : this(parsed[0], parsed[1], parsed[2], parsed[3].toFullPath(), parsed[4].toFullPath(), parsed[5])
 
-    fun String.compact(prefixLength: Int = archivesAbs.length + 11) = substring(prefixLength)
+    private fun String.compact(prefixLength: Int = archivesAbs.length + 11) = substring(prefixLength)
 
     override fun toString(): String =
-        "${query.noTabs()}\t${context.noTabs()}$\t${fuzzyHits.noTabs()}$\t${fromUri.compact()}$\t${toUri.compact()}$\t${linkFragment}$"
+        "${query.noTabs()}\t${context.noTabs()}\t${fuzzyHits.noTabs()}\t${fromUri.compact()}\t${toUri.compact()}\t${linkFragment}"
 
     override fun hashCode() = (query + context + fuzzyHits + toUri + linkFragment).hashCode()
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as Link
+
+        if (query != other.query) return false
+        if (context != other.context) return false
+        if (fuzzyHits != other.fuzzyHits) return false
+        if (toUri != other.toUri) return false
+        if (linkFragment != other.linkFragment) return false
+
+        return true
+    }
 }
 
-fun String.noTabs() = this.replace("\t", "")
+fun String.noTabs() = this.replace("\t", "  ")
 
 val archivesDir: String = "archives/" // Parent directory (assumed to contain `.tgz` files)
 val archivesAbs: String = File(archivesDir).absolutePath
@@ -54,39 +69,49 @@ val archivesAbs: String = File(archivesDir).absolutePath
 
 fun printLinks() {
     println("link_text\tcontext\ttarget_context\tsource_document\ttarget_document\tlink_fragment")
-    File(archivesDir).listFiles()?.toList()?.parallelStream()
+    File(archivesDir).listFiles()?.toList()?.sortedBy { it.name }?.parallelStream()
         ?.forEach { archive ->
             try {
-                fetchLinks(archive)?.forEach { htmlLinkStream ->
-                    htmlLinkStream.forEach { linkStream ->
-                        linkStream.forEach { link ->
-                            val hash = link.hashCode()
-                            if (link != null && hash !in previouslySeen) {
-                                previouslySeen.add(hash)
-                                println(link)
+                fetchLinks(archive)?.forEach { htmlLinkStream: Stream<Stream<Link?>?>? ->
+                    try {
+                        htmlLinkStream?.forEach { linkStream: Stream<Link?>? ->
+                            try {
+                                linkStream?.forEach { link: Link? ->
+                                    if (link != null) {
+                                        val hash = link.hashCode()
+                                        if (hash !in previouslySeenLinks) {
+                                            previouslySeenLinks.add(hash)
+                                            println(link)
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+//                                System.err.println("Error reading stream $e")
                             }
                         }
+                    } catch (e: Exception) {
+//                        System.err.println("Error reading linkStream $e")
                     }
                 }
             } catch (e: Exception) {
-//                System.err.println("Error reading $archive")
-//                e.printStackTrace()
+//                System.err.println("Error reading $archive: $e")
             }
             System.err.println("Finished reading $archive")
         }
 }
 
-private fun FileObject.getLinksInFile() =
-    content.inputStream.bufferedReader(UTF_8).lines().map { line -> line.getAllLinks(relativeTo = this) }
-
 /**
  * Streams the contents of HTML files and returns all links contained within each document.
  */
 
-private fun fetchLinks(archive: File) =
-    archive.getHtmlFiles()?.map { it.getLinksInFile() }
+private fun fetchLinks(archive: File): Stream<Stream<Stream<Link?>?>?>? =
+    archive.getHtmlFiles()?.map { file ->
+        file.content.inputStream.bufferedReader(UTF_8).lines().map { line ->
+            line.getAllLinks(relativeTo = file)
+        }
+    }
 
-fun File.getHtmlFiles() =
+fun File.getHtmlFiles(): Stream<FileObject>? =
     try {
         VFS.getManager().resolveFile("tgz:${absolutePath}")
             .findFiles(AllFileSelector()).asList().stream()
@@ -98,9 +123,9 @@ fun File.getHtmlFiles() =
 //                                      LINK URI       FRAGMENT              ANCHOR TEXT
 val linkRegex = Regex("<a[^<>]*href=\"([^<>#:?\"]*?)(#[^<>#:?\"]*)?\"[^<>]*>([!-;?-~]{6,})</a>")
 val asciiRegex = Regex("[ -~]*")
-val window = 3
+val window = 240
 val minCtx = 5
-val previouslySeen = ConcurrentHashMap.newKeySet<Int>()
+val previouslySeenLinks = ConcurrentHashMap.newKeySet<Int>()
 
 /**
  * Returns all HTML links within a string whose anchor text is shorter than the string
@@ -109,7 +134,7 @@ val previouslySeen = ConcurrentHashMap.newKeySet<Int>()
  * to a document path, and validated so that all links returned point to a valid URL.
  */
 
-private fun String.getAllLinks(relativeTo: FileObject): Stream<Link> =
+private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
     linkRegex.findAll(this).asStream().map { result ->
         result.destructured.let { regexGroups ->
             try {
@@ -120,43 +145,48 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link> =
                 val resolvedLink = relativeTo.parent.resolveFile(targetUri)
                 val linkText = Parser.parse(regexGroups.component3(), "")!!.text()!!
                 val context = Parser.parse(this, "")!!.text()!!
-                val fragment = regexGroups.component2()
-                val indexOfLinkText = context.indexOf(linkText)
-                val startIdx = (indexOfLinkText - window / 2).coerceAtLeast(0)
-                val endIdx = (indexOfLinkText + linkText.length + window / 2).coerceAtMost(context.length)
-                val preText = context.substring(startIdx, indexOfLinkText)
-                val subText = context.substring(indexOfLinkText + linkText.length, endIdx)
-                val targetText = resolvedLink.asHtmlDoc(resolvedLink.url.path)?.text() ?: ""
-//                            .also {
-//                            println("${regexGroups.component1()}, ${regexGroups.component2()}, ${regexGroups.component3()}, ${relativeTo} ... ${this@getAllLinks}")
-//                            println("${regexGroups.component1()} has files in dir: ${resolvedLink.getChildren().map {
-//                        it.getName().baseName
-//                    }.joinToString(", ")} ") }
+                if (context.length > (linkText.length + minCtx) && context.matches(asciiRegex)) {
+                    val fragment = regexGroups.component2()
+                    val indexOfLinkText = context.indexOf(linkText)
+                    val startIdx = (indexOfLinkText - window / 2).coerceAtLeast(0)
+                    val endIdx = (indexOfLinkText + linkText.length + window / 2).coerceAtMost(context.length)
+                    val preText = context.substring(startIdx, indexOfLinkText)
+                    val subText = context.substring(indexOfLinkText + linkText.length, endIdx)
+                    val targetDocText = resolvedLink.asHtmlDoc(resolvedLink.url.path)?.text() ?: ""
 
-                if (targetText.isNotEmpty() && context.length > (linkText.length + minCtx) && context.matches(asciiRegex)) {
-                    val lines = targetText.split("\n")
-                    val hitList = lines.filterForQuery(linkText)
-                    val matches = hitList.joinToString(" … ")
-                    if (matches.isNotEmpty())
-                        Link(
-                            fromUri = relativeTo.toString(),
-                            toUri = resolvedLink.toString(),
-                            linkFragment = fragment,
-                            query = linkText,
-                            context = "$preText <<LNK>> $subText",
-                            fuzzyHits = matches
-                        ) else null
+                    if (targetDocText.isNotEmpty()) {
+                        val matches = targetDocText.extractHits(linkText, true)
+                        if (matches.isNotEmpty())
+                            Link(
+                                fromUri = relativeTo.toString(),
+                                toUri = resolvedLink.toString(),
+                                linkFragment = fragment,
+                                query = linkText,
+                                context = "$preText <<LNK>> $subText",
+                                fuzzyHits = matches
+                            )
+                        else null
+                    } else null
                 } else null
             } catch (e: Exception) {
-                e.printStackTrace()
                 null
             }
         }
     }
 
-fun List<String>.filterForQuery(query: String): List<String> =
-    FuzzySearch.extractTop(query, this, 30, 60).map { it.string.trim() }
+private fun String.extractHits(query: String, exact: Boolean, bufferLen: Int = window): String =
+    split("\n").run {
+        if (exact)
+            map { line ->
+                Regex(Regex.escape(query)).findAll(line).map { mr ->
+                    line.substring(
+                        (mr.range.first - bufferLen).coerceAtLeast(0),
+                        (mr.range.last + bufferLen).coerceAtMost(line.length)
+                    ).trim()
+                }
+            }.asSequence().flatten().take(30)
+        else FuzzySearch.extractTop(query, this, 30, 60).map { it.string.trim() }.asSequence()
+    }.joinToString(" … ")
 
-fun main() {
-    printLinks()
-}
+
+fun main() = printLinks()
