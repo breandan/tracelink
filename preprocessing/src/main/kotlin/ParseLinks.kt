@@ -22,8 +22,9 @@ import kotlin.streams.asStream
 
 data class Link(
     val query: String,         // Anchor text of link itself
-    val context: String,       // Surrounding text on the same line
+    val sourceTitle: String,   // Title of the source document
     val targetTitle: String,   // Title of the target document
+    val sourceContext: String,       // Surrounding text on the same line
     val targetContext: String, // Hits and surrounding context in target doc
     val fromUri: String,       // Original document location
     val toUri: String,         // Target document location
@@ -32,14 +33,14 @@ data class Link(
     constructor(
         line: String, parsed: Array<String> = line.split("\t")
             .map { it.trim() }.toTypedArray()
-    ) : this(parsed[0], parsed[1], parsed[2], parsed[3], parsed[4].toFullPath(), parsed[5].toFullPath(), parsed[6])
+    ) : this(parsed[0], parsed[1], parsed[2], parsed[3], parsed[4], parsed[5].toFullPath(), parsed[6].toFullPath(), parsed[7])
 
     private fun String.compact(prefixLength: Int = archivesAbs.length + 11) = substring(prefixLength)
 
     override fun toString(): String =
-        "${query.noTabs()}\t${targetTitle.noTabs()}\t${context.noTabs()}\t${targetContext.noTabs()}\t${fromUri.compact()}\t${toUri.compact()}\t${uriFragment}"
+        "${query.noTabs()}\t${sourceTitle.noTabs()}\t${targetTitle.noTabs()}\t${sourceContext.noTabs()}\t${targetContext.noTabs()}\t${fromUri.compact()}\t${toUri.compact()}\t${uriFragment}"
 
-    override fun hashCode() = (query + context + targetContext + toUri + uriFragment).hashCode()
+    override fun hashCode() = (query + sourceContext + targetContext + toUri + uriFragment).hashCode()
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -48,7 +49,7 @@ data class Link(
         other as Link
 
         if (query != other.query) return false
-        if (context != other.context) return false
+        if (sourceContext != other.sourceContext) return false
         if (targetContext != other.targetContext) return false
         if (toUri != other.toUri) return false
         if (uriFragment != other.uriFragment) return false
@@ -61,7 +62,7 @@ fun String.toFullPath() = "tgz:file://$archivesDir${this.substringBeforeLast("%"
 
 fun String.noTabs() = this.replace("\t", "  ")
 
-val archivesDir: String = "archives/" // Parent directory (assumed to contain `.tgz` files)
+val archivesDir: String = "python/" // Parent directory (assumed to contain `.tgz` files)
 val archivesAbs: String = File(archivesDir).absolutePath
 
 /**
@@ -69,7 +70,7 @@ val archivesAbs: String = File(archivesDir).absolutePath
  */
 
 fun printLinks() {
-    println("link_text\ttarget_title\tcontext\ttarget_context\tsource_document\ttarget_document\tlink_fragment")
+    println("link_text\tsource_title\ttarget_title\tcontext\ttarget_context\tsource_document\ttarget_document\tlink_fragment")
     File(archivesDir).listFiles()?.toList()?.sortedBy { it.name }?.parallelStream()
         ?.forEach { archive ->
             try {
@@ -148,24 +149,27 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
                 val context = Parser.parse(this, "")!!.text()!!
                 if (context.length > (linkText.length + minCtx) && context.matches(asciiRegex)) {
                     val fragment = regexGroups.component2().trim()
-                    val indexOfLinkText = context.indexOf(linkText)
-                    val startIdx = (indexOfLinkText - window / 2).coerceAtLeast(0)
-                    val endIdx = (indexOfLinkText + linkText.length + window / 2).coerceAtMost(context.length)
-                    val preText = context.substring(startIdx, indexOfLinkText)
-                    val subText = context.substring(indexOfLinkText + linkText.length, endIdx)
                     val targetDoc = resolvedLink.asHtmlDoc(resolvedLink.url.path)
                     val targetDocText = targetDoc?.extractLinkText(linkText, fragment, true) ?: ""
-                    val targetDocTitle = targetDoc?.title() ?: ""
 
                     if (targetDocText.isNotEmpty()) {
+                        val indexOfLinkText = context.indexOf(linkText)
+                        val startIdx = (indexOfLinkText - window / 2).coerceAtLeast(0)
+                        val endIdx = (indexOfLinkText + linkText.length + window / 2).coerceAtMost(context.length)
+                        val preText = context.substring(startIdx, indexOfLinkText)
+                        val subText = context.substring(indexOfLinkText + linkText.length, endIdx)
+                        val targetDocTitle = targetDoc?.title() ?: ""
+                        val sourceDocTitle = relativeTo.asHtmlDoc()?.title() ?: ""
+
                         Link(
                             fromUri = relativeTo.toString(),
                             toUri = resolvedLink.toString(),
                             uriFragment = fragment,
                             query = linkText,
-                            context = "$preText <<LNK>> $subText",
+                            sourceContext = "$preText <<LNK>> $subText",
                             targetContext = targetDocText,
-                            targetTitle = targetDocTitle
+                            targetTitle = targetDocTitle,
+                            sourceTitle = sourceDocTitle
                         )
                     } else null
                 } else null

@@ -23,10 +23,56 @@ The following regular expression was used to extract links on a [per-line](https
 
 All links are validated and point to a known document in the same docset.
 
-## Deduplication procedure
-
-Links with identical source and target context, pointing to the same target URL are considered duplicates:
+# Python Docsets
 
 ```
-q -t -H -U "select link_text, context, target_context, target_document, link_fragment from tabs_no_quotes.csv group by link_text, context, target_context, target_document, link_fragment" > deduped.csv
+Airflow.tgz
+Angr.tgz
+Astropy.tgz
+Cython.tgz
+GAE-Python.tgz
+Google_Cloud_Client-Python.tgz
+Keras.tgz
+Kivy.tgz
+MNE.tgz
+Mrjob.tgz
+NLTK.tgz
+Numba.tgz
+Peewee.tgz
+PyGame.tgz
+PyGraphviz.tgz
+PyInstaller.tgz
+PyMel.tgz
+PyMongo.tgz
+PyTables.tgz
+PyTorch.tgz
+Pydial.tgz
+Pygments.tgz
+Pyramid.tgz
+Pythonista.tgz
+Qt_for_Python.tgz
+Requests.tgz
+Scikit-image.tgz
+Scrapy.tgz
+Seaborn.tgz
+Six.tgz
+Sphinx.tgz
+SymPy.tgz
+TensorFlow.tgz
+Theano.tgz
+click.tgz
+cvxpy.tgz
+formencode.tgz
+gensim.tgz
+lxml.tgz
+mlpy.tgz
+pymatgen.tgz
+pyro.tgz
+pysam.tgz
+pyside2.tgz
+pyspark.tgz
+pytest.tgz
+python-telegram-bot.tgz
+scikit-learn.tgz
+wxPython.tgz
 ```

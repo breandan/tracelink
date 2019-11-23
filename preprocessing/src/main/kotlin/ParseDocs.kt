@@ -27,7 +27,7 @@ val analyzer = StandardAnalyzer()
 val index = MMapDirectory(File("index").toPath())
 val config = IndexWriterConfig(analyzer).apply { setOpenMode(CREATE) }
 
-fun FileObject.asHtmlDoc(uri: String) =
+fun FileObject.asHtmlDoc(uri: String = "") =
     try {
         Parser.parse(content.getString(UTF_8), uri)
     } catch (e: Exception) {
