@@ -31,11 +31,19 @@ link_text_data = data.values[:restrictSize,0]
 link_context_data = data.values[:restrictSize,1]
 target_context_data = data.values[:restrictSize,2]
 target_link_data = data.values[:restrictSize,3]
+# Note: Bert max input sequence is 512 we can get it through:
+max_model_input_size = tokenizer.max_model_input_sizes['bert-base-uncased']
 def tokenize(data):
     data_token=[]
     for c in tqdm(data):# this step takes about 1 minutes of time.... tqdm is for progression bar
-        data_token += [tokenizer.tokenize(str(c))]
-    data_tokenID =  [tokenizer.convert_tokens_to_ids(c) for c in data_token]
+        tok = tokenizer.tokenize(str(c))
+        data_token += [tok]
+    data_tokenID = []
+    for c in tqdm(data_token):
+        if len(c)>max_model_input_size: #Just cut....
+            c = c[:max_model_input_size]
+        tok_id = tokenizer.convert_tokens_to_ids(c)
+        data_tokenID += [tok_id]
     return data_token,data_tokenID
 link_text_token,link_text_tokenID = tokenize(link_text_data)
 link_context_token,link_context_tokenID = tokenize(link_context_data)
@@ -43,8 +51,7 @@ target_context_token,target_context_tokenID = tokenize(target_context_data)
 
 # Let us embed everything:
 # First we must pad the inputs so that we have a tensor (then we can use batched operation).
-# Note: Bert max input sequence is 512 we can get it through:
-max_model_input_size = tokenizer.max_model_input_sizes['bert-base-uncased']
+
 # To accelerate embedding, we can use batches of input of similar sizes,
 # But we then loose the clear organisation of data, this can be circumvent using a dictionnary ==> not so easy to code...
 sizes = [len(c) for c in link_text_tokenID]
@@ -64,12 +71,13 @@ target_context_tokenID_padded = [c+[0 for _ in range(pad_dim-len(c))] for c in t
 # Now we proceed to BERT embedding
 toEmbed = [link_text_tokenID_padded,link_context_tokenID_padded,target_context_tokenID_padded]
 saveNames = [os.path.join("embedding","link_text.csv"),os.path.join("embedding","link_context.csv"),os.path.join("embedding","target_context.csv")]
+mini_batch_sizes = [200,20,1]
 embeddings = []
 for idx,source in enumerate(toEmbed):
     text_tensor = torch.tensor(source)
     #Typically here we run out of memory on cuda if trying to do everything in a single batch, so need to separate in mini-batch
     text_outputs = np.empty((0,768))
-    mini_batch_size = 200
+    mini_batch_size = mini_batch_sizes[idx]
     for j in tqdm(range(0,text_tensor.shape[0],mini_batch_size)): # takes about 40 minutes to run...
         text_tensor_mb = text_tensor[j:min(j+mini_batch_size,text_tensor.shape[0])].to('cuda')
         with torch.no_grad():
@@ -113,7 +121,8 @@ target_link_data_Haskell = target_link_data[np.where(target_names==target_names_
 cca = CCA(n_components=2)
 cca.fit(embeddings_Haskell_X,embeddings_Haskell_Y)
 X_c_data_Haskell ,Y_c_data_Haskell = cca.transform(embeddings_Haskell_X,embeddings_Haskell_Y)
-plt.scatter(X_c_data_Haskell,Y_c_data_Haskell)
+plt.scatter(X_c_data_Haskell[:,0],X_c_data_Haskell[:,1],label="link_context",c="red")
+plt.scatter(Y_c_data_Haskell[:,0],Y_c_data_Haskell[:,1],label="target_context",c="blue",marker="x")
 plt.show()
 #We observe that the file are organized as:
 #'/Haskell.tgz!/Haskell.docset/Contents/Resources/Documents/libraries/
@@ -131,5 +140,7 @@ plt.show()
 for idx,base in enumerate(target_names_unique_data_Haskell):
     X_c_data_Haskell_reduce = X_c_data_Haskell[np.where(target_names_data_Haskell==base)]
     Y_c_data_Haskell_reduce = Y_c_data_Haskell[np.where(target_names_data_Haskell==base)]
-    plt.scatter(X_c_data_Haskell_reduce,Y_c_data_Haskell_reduce,c=cm(idx/len(hist)),label=base)
+    plt.scatter(X_c_data_Haskell_reduce[:,0],X_c_data_Haskell_reduce[:,1],label="link_context",c=cm(idx/len(hist)))
+    plt.scatter(Y_c_data_Haskell_reduce[:,0],Y_c_data_Haskell_reduce[:,1],label="target_context",c=cm(idx/len(hist)),marker="x")
 plt.show()
+
