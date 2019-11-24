@@ -13,6 +13,7 @@ import org.apache.lucene.store.MMapDirectory
 import org.jsoup.parser.Parser
 import java.io.File
 import java.nio.charset.StandardCharsets.UTF_8
+import java.util.stream.Stream
 import kotlin.system.measureTimeMillis
 
 data class Doc(
@@ -49,16 +50,18 @@ fun main() {
     println("Query took: " + measureTimeMillis { query("test") } + " ms")
 }
 
+val timeLimit = 84000000
+
 private fun indexDocs() {
     var t = 0
     val iw = IndexWriter(index, config)
     val startTime = System.currentTimeMillis()
 
-    parseDocs().forEach { docStream ->
-        if (System.currentTimeMillis() - startTime > 84600000) return@forEach
+    parseDocs().forEach { docStream: Stream<Doc?>? ->
+        if (System.currentTimeMillis() - startTime > timeLimit) return@forEach
 
-        docStream?.forEach { doc ->
-            if (System.currentTimeMillis() - startTime > 84600000) return@forEach
+        docStream?.forEach { doc: Doc? ->
+            if (System.currentTimeMillis() - startTime > timeLimit) return@forEach
             doc?.run {
                 iw.addDoc(this); t += 1;
                 if (t % 1000 == 0) println("Indexed $uri")
