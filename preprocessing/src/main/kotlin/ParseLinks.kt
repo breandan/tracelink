@@ -92,9 +92,9 @@ fun printLinks() {
             try {
                 fetchLinks(archive)?.parallel()?.forEach { htmlLinkStream: Stream<Stream<Link?>?>? ->
                     try {
-                        htmlLinkStream?.parallel()?.forEach { linkStream: Stream<Link?>? ->
+                        htmlLinkStream?.forEach { linkStream: Stream<Link?>? ->
                             try {
-                                linkStream?.parallel()?.forEach { link: Link? ->
+                                linkStream?.forEach { link: Link? ->
                                     if (link != null) {
                                         val hash = link.hashCode()
                                         if (hash !in previouslySeenLinks) {
