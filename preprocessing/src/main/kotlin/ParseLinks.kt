@@ -33,12 +33,28 @@ data class Link(
     constructor(
         line: String, parsed: Array<String> = line.split("\t")
             .map { it.trim() }.toTypedArray()
-    ) : this(parsed[0], parsed[1], parsed[2], parsed[3], parsed[4], parsed[5].toFullPath(), parsed[6].toFullPath(), parsed[7])
+    ) : this(
+        parsed[0],
+        parsed[1],
+        parsed[2],
+        parsed[3],
+        parsed[4],
+        parsed[5].toFullPath(),
+        parsed[6].toFullPath(),
+        parsed[7]
+    )
 
     private fun String.compact(prefixLength: Int = archivesAbs.length + 11) = substring(prefixLength)
 
     override fun toString(): String =
-        "${query.noTabs()}\t${sourceTitle.noTabs()}\t${targetTitle.noTabs()}\t${sourceContext.noTabs()}\t${targetContext.noTabs()}\t${fromUri.compact()}\t${toUri.compact()}\t${uriFragment}"
+        query.noTabs() + "\t" +
+                sourceTitle.noTabs() + "\t" +
+                targetTitle.noTabs() + "\t" +
+                sourceContext.noTabs() + "\t" +
+                targetContext.noTabs() + "\t" +
+                fromUri.compact() + "\t" +
+                toUri.compact() + "\t" +
+                uriFragment
 
     override fun hashCode() = (query + sourceContext + targetContext + toUri + uriFragment).hashCode()
 
