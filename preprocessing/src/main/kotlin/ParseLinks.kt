@@ -21,14 +21,14 @@ import kotlin.streams.asStream
  */
 
 data class Link(
-    val query: String,         // Anchor text of link itself
+    val linkText: String,         // Anchor text of link itself
     val sourceTitle: String,   // Title of the source document
     val targetTitle: String,   // Title of the target document
     val sourceContext: String, // Surrounding text on the same line
     val targetContext: String, // Hits and surrounding context in target doc
-    val fromUri: String,       // Original document location
-    val toUri: String,         // Target document location
-    val uriFragment: String    // Link fragment (indicating subsection)
+    val sourceUri: String,       // Original document location
+    val targetUri: String,         // Target document location
+    val targetFragment: String    // Link fragment (indicating subsection)
 ) {
     constructor(
         line: String, parsed: Array<String> = line.split("\t")
@@ -47,16 +47,16 @@ data class Link(
     private fun String.compact(prefixLength: Int = archivesAbs.length + 11) = substring(prefixLength)
 
     override fun toString(): String =
-        query.noTabs() + "\t" +
+        linkText.noTabs() + "\t" +
                 sourceTitle.noTabs() + "\t" +
                 targetTitle.noTabs() + "\t" +
                 sourceContext.noTabs() + "\t" +
                 targetContext.noTabs() + "\t" +
-                fromUri.compact() + "\t" +
-                toUri.compact() + "\t" +
-                uriFragment
+                sourceUri.compact() + "\t" +
+                targetUri.compact() + "\t" +
+                targetFragment
 
-    override fun hashCode() = (query + sourceContext + targetContext + toUri + uriFragment).hashCode()
+    override fun hashCode() = (linkText + sourceContext + targetContext + targetUri + targetFragment).hashCode()
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -64,11 +64,11 @@ data class Link(
 
         other as Link
 
-        if (query != other.query) return false
+        if (linkText != other.linkText) return false
         if (sourceContext != other.sourceContext) return false
         if (targetContext != other.targetContext) return false
-        if (toUri != other.toUri) return false
-        if (uriFragment != other.uriFragment) return false
+        if (targetUri != other.targetUri) return false
+        if (targetFragment != other.targetFragment) return false
 
         return true
     }
@@ -164,9 +164,9 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
                 val linkText = Parser.parse(regexGroups.component3(), "")!!.text()!!
                 val context = Parser.parse(this, "")!!.text()!!
                 if (context.length > (linkText.length + minCtx) && context.matches(asciiRegex)) {
-                    val fragment = regexGroups.component2().trim()
+                    val targetFragment = regexGroups.component2().trim()
                     val targetDoc = resolvedLink.asHtmlDoc(resolvedLink.url.path)
-                    val targetDocText = targetDoc?.extractLinkText(linkText, fragment, false) ?: ""
+                    val targetDocText = targetDoc?.extractLinkText(linkText, targetFragment, false) ?: ""
 
                     if (targetDocText.isNotEmpty()) {
                         val indexOfLinkText = context.indexOf(linkText)
@@ -178,10 +178,10 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
                         val sourceDocTitle = relativeTo.asHtmlDoc()?.title() ?: ""
 
                         Link(
-                            fromUri = relativeTo.toString(),
-                            toUri = resolvedLink.toString(),
-                            uriFragment = fragment,
-                            query = linkText,
+                            sourceUri = relativeTo.toString(),
+                            targetUri = resolvedLink.toString(),
+                            targetFragment = targetFragment,
+                            linkText = linkText,
                             sourceContext = "$preText <<LNK>> $subText",
                             targetContext = targetDocText,
                             targetTitle = targetDocTitle,
@@ -215,7 +215,7 @@ private fun Document.extractFragmentText(fragment: String) =
     select(fragment)?.first()?.parents()
         ?.firstOrNull { it.siblingElements().isNotEmpty() }
         ?.nextElementSiblings()
-        ?.takeWhile { !it.hasAttr("id") }
+        ?.takeWhile { !it.children().hasAttr("id") }
         ?.joinToString("") { it.text() } ?: body().text()
 
 fun main() = printLinks()
