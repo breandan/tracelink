@@ -90,11 +90,11 @@ fun printLinks() {
     File(archivesDir).listFiles()?.toList()?.sortedBy { -it.length() }?.parallelStream()
         ?.forEach { archive ->
             try {
-                fetchLinks(archive)?.forEach { htmlLinkStream: Stream<Stream<Link?>?>? ->
+                fetchLinks(archive)?.parallel()?.forEach { htmlLinkStream: Stream<Stream<Link?>?>? ->
                     try {
-                        htmlLinkStream?.forEach { linkStream: Stream<Link?>? ->
+                        htmlLinkStream?.parallel()?.forEach { linkStream: Stream<Link?>? ->
                             try {
-                                linkStream?.forEach { link: Link? ->
+                                linkStream?.parallel()?.forEach { link: Link? ->
                                     if (link != null) {
                                         val hash = link.hashCode()
                                         if (hash !in previouslySeenLinks) {
@@ -166,7 +166,7 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
                 if (context.length > (linkText.length + minCtx) && context.matches(asciiRegex)) {
                     val fragment = regexGroups.component2().trim()
                     val targetDoc = resolvedLink.asHtmlDoc(resolvedLink.url.path)
-                    val targetDocText = targetDoc?.extractLinkText(linkText, fragment, true) ?: ""
+                    val targetDocText = targetDoc?.extractLinkText(linkText, fragment, false) ?: ""
 
                     if (targetDocText.isNotEmpty()) {
                         val indexOfLinkText = context.indexOf(linkText)
