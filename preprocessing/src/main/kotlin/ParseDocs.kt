@@ -48,11 +48,20 @@ fun main() {
 private fun indexDocs() {
     var t = 0
     val iw = IndexWriter(index, config)
+    val startTime = System.currentTimeMillis()
+
     parseDocs().forEach { docStream ->
+        if(System.currentTimeMillis() - startTime > 84600000) return@forEach
+
         docStream?.forEach { doc ->
-            doc?.run { iw.addDoc(this); t += 1; if (t % 1000 == 0) println("Indexed $uri") }
+            if(System.currentTimeMillis() - startTime > 84600000) return@forEach
+            doc?.run {
+                iw.addDoc(this); t += 1;
+                if (t % 1000 == 0) println("Indexed $uri")
+            }
         }
     }
+
     iw.close()
 }
 

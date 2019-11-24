@@ -24,7 +24,7 @@ data class Link(
     val query: String,         // Anchor text of link itself
     val sourceTitle: String,   // Title of the source document
     val targetTitle: String,   // Title of the target document
-    val sourceContext: String,       // Surrounding text on the same line
+    val sourceContext: String, // Surrounding text on the same line
     val targetContext: String, // Hits and surrounding context in target doc
     val fromUri: String,       // Original document location
     val toUri: String,         // Target document location
