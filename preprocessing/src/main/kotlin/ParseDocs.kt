@@ -35,9 +35,13 @@ fun FileObject.asHtmlDoc(uri: String = "") =
     }
 
 fun parseDocs() =
-    File(archivesDir).listFiles()!!.asList()
-        .parallelStream()
-        .map { it.getHtmlFiles()?.map { file -> file.asHtmlDoc("${file.url}")?.let { jDocToDoc(it) } } }
+    File(archivesDir).listFiles()!!.sortedBy { -it.length() }.parallelStream()
+        .map {
+            it.getHtmlFiles()?.map { file ->
+                file.asHtmlDoc("${file.url}")
+                    ?.let { jDocToDoc(it) }
+            }
+        }
 
 fun main() {
     indexDocs()
@@ -51,10 +55,10 @@ private fun indexDocs() {
     val startTime = System.currentTimeMillis()
 
     parseDocs().forEach { docStream ->
-        if(System.currentTimeMillis() - startTime > 84600000) return@forEach
+        if (System.currentTimeMillis() - startTime > 84600000) return@forEach
 
         docStream?.forEach { doc ->
-            if(System.currentTimeMillis() - startTime > 84600000) return@forEach
+            if (System.currentTimeMillis() - startTime > 84600000) return@forEach
             doc?.run {
                 iw.addDoc(this); t += 1;
                 if (t % 1000 == 0) println("Indexed $uri")
@@ -68,9 +72,9 @@ private fun indexDocs() {
 private fun jDocToDoc(it: org.jsoup.nodes.Document): Doc {
     val uri = it.baseUri()
     val title = try {
-        it.title().run { if (isBlank()) "EMPTY_TITLE" else this }
+        it.title()
     } catch (e: Exception) {
-        "EMPTY_TITLE"
+        ""
     }
 
     val contents = it.text()
