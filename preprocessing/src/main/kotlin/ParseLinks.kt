@@ -50,14 +50,25 @@ data class Link(
     private fun String.compact(prefixLength: Int = archivesAbs.length + 11) = substring(prefixLength)
 
     override fun toString(): String =
-        linkText.prettyText() + "\t" +
-                sourceTitle.prettyTitle() + "\t" +
-                targetTitle.prettyTitle() + "\t" +
-                sourcePretext.noTabs().prettyPretext() + " <<LNK>> " + sourceSubtext.noTabs().prettySubtext() + "\t" +
-                targetContext.joinToString(" … ") { prettyHit(it.replace("…", "...")) } + "\t" +
-                sourceUri.compact() + "\t" +
-                targetUri.compact() + "\t" +
-                targetFragment
+        if (PRETTY_PRINT) {
+            linkText.noTabs().prettyText() + "\t" +
+                    sourceTitle.noTabs().prettyTitle() + "\t" +
+                    targetTitle.noTabs().prettyTitle() + "\t" +
+                    sourcePretext.noTabs().prettyPretext() + " <<LNK>> " + sourceSubtext.noTabs().prettySubtext() + "\t" +
+                    targetContext.joinToString(" … ") { prettyHit(it.replace("…", "...")) } + "\t" +
+                    sourceUri.compact() + "\t" +
+                    targetUri.compact() + "\t" +
+                    targetFragment
+        } else {
+            linkText.noTabs() + "\t" +
+                    sourceTitle.noTabs() + "\t" +
+                    targetTitle.noTabs() + "\t" +
+                    sourcePretext.noTabs() + " <<LNK>> " + sourceSubtext.noTabs() + "\t" +
+                    targetContext.joinToString(" … ") { it.replace("…", "...").noTabs() } + "\t" +
+                    sourceUri.compact() + "\t" +
+                    targetUri.compact() + "\t" +
+                    targetFragment
+        }
 
     override fun hashCode() =
         (linkText + sourcePretext + sourceSubtext + targetContext + targetUri + targetFragment).hashCode()
@@ -79,16 +90,16 @@ data class Link(
     }
 
     // No need to trim since all link texts are regex-matched to be less than MAX_LTEXT_LEN
-    private fun String.prettyText() = noTabs().padEnd(MAX_LTEXT_LEN, ' ')
+    private fun String.prettyText() = padEnd(MAX_LTEXT_LEN, ' ')
 
-    private fun String.prettyTitle() = noTabs()
-        .let { if (MAX_TITLE_LEN < it.length) it.substring(0, MAX_TITLE_LEN) else it.padEnd(MAX_TITLE_LEN, ' ') }
+    private fun String.prettyTitle() =
+        let { if (MAX_TITLE_LEN < it.length) it.substring(0, MAX_TITLE_LEN) else it.padEnd(MAX_TITLE_LEN, ' ') }
 
-    private fun String.prettyPretext() = noTabs()
-        .let { if (MAX_CONTS_LEN < length) it.takeLast(MAX_CONTS_LEN) else it.padStart(MAX_CONTS_LEN, ' ') }
+    private fun String.prettyPretext() =
+        let { if (MAX_CONTS_LEN < length) it.takeLast(MAX_CONTS_LEN) else it.padStart(MAX_CONTS_LEN, ' ') }
 
-    private fun String.prettySubtext() = noTabs()
-        .let { if (MAX_CONTS_LEN < length) it.substring(0, MAX_CONTS_LEN) else it.padEnd(MAX_CONTS_LEN, ' ') }
+    private fun String.prettySubtext() =
+        let { if (MAX_CONTS_LEN < length) it.substring(0, MAX_CONTS_LEN) else it.padEnd(MAX_CONTS_LEN, ' ') }
 
     private fun prettyHit(it: String) =
         it.split(" <<HIT>> ").let { it.first().trim().prettyPretext() + " <<HIT>> " + it.last().trim().prettySubtext() }
@@ -97,6 +108,7 @@ data class Link(
 val MAX_LTEXT_LEN = 50
 val MAX_TITLE_LEN = 100
 val MAX_CONTS_LEN = 120
+var PRETTY_PRINT = false
 
 fun String.toFullPath() = "tgz:file://$archivesDir${this.substringBeforeLast("%")}"
 
@@ -110,14 +122,16 @@ val archivesAbs: String = File(archivesDir).absolutePath
  */
 
 fun printLinks() {
-    println("link_text\t" +
-            "source_title\t" +
-            "target_title\t" +
-            "source_context\t" +
-            "target_context\t" +
-            "source_document\t" +
-            "target_document\t" +
-            "link_fragment")
+    println(
+        "link_text\t" +
+                "source_title\t" +
+                "target_title\t" +
+                "source_context\t" +
+                "target_context\t" +
+                "source_document\t" +
+                "target_document\t" +
+                "link_fragment"
+    )
 
     File(archivesDir).listFiles()?.toList()?.parallelStream()
         ?.forEach { archive ->
@@ -246,7 +260,7 @@ fun List<String>.extractLiteralHits(query: String, bufferLen: Int): Sequence<Str
     Regex(Regex.escape(query)).findAll(line).map { mr ->
         (line.substring((mr.range.first - bufferLen).coerceAtLeast(0)) +
                 " <<HIT>> " +
-        line.substring((mr.range.last + bufferLen).coerceAtMost(line.length)))
+                line.substring((mr.range.last + bufferLen).coerceAtMost(line.length)))
     }
 }.asSequence().flatten().take(30)
 
@@ -257,4 +271,7 @@ private fun Document.extractFragmentText(fragment: String): String =
         ?.takeWhile { !it.children().hasAttr("id") }
         ?.joinToString("") { it.text() } ?: body().text()
 
-fun main() = printLinks()
+fun main(args: Array<String>) {
+    if(args.isNotEmpty()) PRETTY_PRINT = true
+    printLinks()
+}
