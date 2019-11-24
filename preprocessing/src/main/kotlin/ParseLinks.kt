@@ -90,7 +90,7 @@ fun printLinks() {
     File(archivesDir).listFiles()?.toList()?.sortedBy { -it.length() }?.parallelStream()
         ?.forEach { archive ->
             try {
-                fetchLinks(archive)?.parallel()?.forEach { htmlLinkStream: Stream<Stream<Link?>?>? ->
+                fetchLinks(archive)?.forEach { htmlLinkStream: Stream<Stream<Link?>?>? ->
                     try {
                         htmlLinkStream?.forEach { linkStream: Stream<Link?>? ->
                             try {
