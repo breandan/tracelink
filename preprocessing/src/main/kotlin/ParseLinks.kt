@@ -71,7 +71,7 @@ val archivesAbs: String = File(archivesDir).absolutePath
 
 fun printLinks() {
     println("link_text\tsource_title\ttarget_title\tcontext\ttarget_context\tsource_document\ttarget_document\tlink_fragment")
-    File(archivesDir).listFiles()?.toList()?.sortedBy { it.name }?.parallelStream()
+    File(archivesDir).listFiles()?.toList()?.sortedBy { -it.length() }?.parallelStream()
         ?.forEach { archive ->
             try {
                 fetchLinks(archive)?.forEach { htmlLinkStream: Stream<Stream<Link?>?>? ->
