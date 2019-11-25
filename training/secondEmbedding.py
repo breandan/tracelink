@@ -33,6 +33,12 @@ link_context_data = data.values[:restrictSize,1]
 target_context_data = data.values[:restrictSize,2]
 target_link_data = data.values[:restrictSize,4]
 
+for line in range(link_context_data.shape[0]):
+    replac=link_context_data[line]
+    context = link_text_data[line]
+    replac=replac.replace("<<LNK>>", str(context))
+    link_context_data[line]=replac
+
 # Note: Bert max input sequence is 512 we can get it through:
 max_model_input_size = tokenizer.max_model_input_sizes['bert-base-uncased']
 def tokenize(data):
