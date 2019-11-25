@@ -1,15 +1,10 @@
-import me.xdrop.fuzzywuzzy.FuzzySearch
 import org.apache.commons.vfs2.AllFileSelector
 import org.apache.commons.vfs2.FileObject
 import org.apache.commons.vfs2.VFS
 import org.jsoup.nodes.Document
-import org.jsoup.parser.Parser
 import java.io.File
-import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.ConcurrentHashMap
 import java.util.stream.Stream
-import kotlin.math.abs
-import kotlin.streams.asStream
 
 /**
  * Intended to be called from the command line, e.g. `./gradlew run > file.csv`
@@ -23,10 +18,11 @@ import kotlin.streams.asStream
 
 data class Link(
     val linkText: String,            // Anchor text of link itself
+    val sourceHitCount: Int,         // Number of occurrences of the link text in the source document
+    val targetHitCount: Int,         // Number of occurrences of the link text in the target document
     val sourceTitle: String,         // Title of the source document
     val targetTitle: String,         // Title of the target document
-    val sourcePretext: String,       // Preceeding text on the same line
-    val sourceSubtext: String,       // Proceeding text on the same line
+    val sourceContext: List<String>, // Context within the same source document
     val targetContext: List<String>, // Hits and surrounding context in target doc
     val sourceUri: String,           // Original document location
     val targetUri: String,           // Target document location
@@ -37,14 +33,15 @@ data class Link(
             .map { it.trim() }.toTypedArray()
     ) : this(
         parsed[0].normalize(),
-        parsed[1].trim(),
-        parsed[2].trim(),
-        parsed[3].split(" <<LNK>> ").first().trim(),
-        parsed[3].split(" <<LNK>> ").last().trim(),
-        parsed[4].split(" … ").map { it.trim() },
-        parsed[5].toFullPath(),
-        parsed[6].toFullPath(),
-        parsed[7]
+        Integer.valueOf(parsed[1]),
+        Integer.valueOf(parsed[2]),
+        parsed[3].trim(),
+        parsed[4].trim(),
+        parsed[5].split(" <<LTX>> "),
+        parsed[6].split(" … ").map { it.trim() },
+        parsed[7].toFullPath(),
+        parsed[8].toFullPath(),
+        parsed[9]
     )
 
     private fun String.compact(prefixLength: Int = archivesAbs.length + 11) = substring(prefixLength)
@@ -52,26 +49,29 @@ data class Link(
     override fun toString(): String =
         if (PRETTY_PRINT) {
             linkText.noTabs().prettyText() + "\t" +
+                    sourceHitCount.toString().padStart(2, ' ') +
+                    targetHitCount.toString().padStart(4, ' ').padEnd(6, ' ') +
                     sourceTitle.noTabs().prettyTitle() + "\t" +
                     targetTitle.noTabs().prettyTitle() + "\t" +
-                    sourcePretext.noTabs().prettyPretext() + " <<LNK>> " + sourceSubtext.noTabs().prettySubtext() + "\t" +
-                    targetContext.joinToString(" … ") { prettyHit(it.replace("…", "...")) } + "\t" +
+                    sourceContext.joinToString(" … ") { prettyHit(it.replace("…", "...")) }.padEnd(2000, ' ') + "\t" +
+                    targetContext.joinToString(" … ") { prettyHit(it.replace("…", "...")) }.padEnd(2000, ' ') + "\t" +
                     sourceUri.compact() + "\t" +
                     targetUri.compact() + "\t" +
                     targetFragment
         } else {
             linkText.noTabs() + "\t" +
+                    sourceHitCount.toString() +
+                    targetHitCount.toString() +
                     sourceTitle.noTabs() + "\t" +
                     targetTitle.noTabs() + "\t" +
-                    sourcePretext.noTabs() + " <<LNK>> " + sourceSubtext.noTabs() + "\t" +
+                    sourceContext.joinToString(" … ") { it.replace("…", "...").noTabs() } + "\t" +
                     targetContext.joinToString(" … ") { it.replace("…", "...").noTabs() } + "\t" +
                     sourceUri.compact() + "\t" +
                     targetUri.compact() + "\t" +
                     targetFragment
         }
 
-    override fun hashCode() =
-        (linkText + sourcePretext + sourceSubtext + targetContext + targetUri + targetFragment).hashCode()
+    override fun hashCode() = (linkText + sourceUri).hashCode()
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -80,8 +80,7 @@ data class Link(
         other as Link
 
         if (linkText != other.linkText) return false
-        if (sourcePretext != other.sourcePretext) return false
-        if (sourceSubtext != other.sourceSubtext) return false
+        if (sourceContext != other.sourceContext) return false
         if (targetContext != other.targetContext) return false
         if (targetUri != other.targetUri) return false
         if (targetFragment != other.targetFragment) return false
@@ -93,7 +92,7 @@ data class Link(
     private fun String.prettyText() = padEnd(MAX_LTEXT_LEN, ' ')
 
     private fun String.prettyTitle() =
-        let { if (MAX_TITLE_LEN < it.length) it.substring(0, MAX_TITLE_LEN) else it.padEnd(MAX_TITLE_LEN, ' ') }
+        let { if (MAX_TITLE_LEN < it.length) it.take(MAX_TITLE_LEN) else it.padEnd(MAX_TITLE_LEN, ' ') }
 
     private fun String.prettyPretext() =
         let { if (MAX_CONTS_LEN < length) it.takeLast(MAX_CONTS_LEN) else it.padStart(MAX_CONTS_LEN, ' ') }
@@ -102,13 +101,15 @@ data class Link(
         let { if (MAX_CONTS_LEN < length) it.take(MAX_CONTS_LEN) else it.padEnd(MAX_CONTS_LEN, ' ') }
 
     private fun prettyHit(it: String) =
-        it.split(" <<HIT>> ").let { it.first().trim().prettyPretext() + " <<HIT>> " + it.last().trim().prettySubtext() }
+        it.split(" <<LTX>> ").let { it.first().prettyPretext() + " <<LTX>> " + it.last().prettySubtext() }
 }
 
 val MAX_LTEXT_LEN = 50
 val MAX_TITLE_LEN = 100
 val MAX_CONTS_LEN = 120
-val MIN_TARG_HITS = 1
+val MIN_KWIC_HITS = 2
+val MIN_KWIC_LEN = 8
+
 var PRETTY_PRINT = false
 
 fun String.toFullPath() = "tgz:file://$archivesDir${this.substringBeforeLast("%")}"
@@ -125,6 +126,8 @@ val archivesAbs: String = File(archivesDir).absolutePath
 fun printLinks() {
     println(
         "link_text\t" +
+                "source_hit_count\t" +
+                "target_hit_count\t" +
                 "source_title\t" +
                 "target_title\t" +
                 "source_context\t" +
@@ -137,25 +140,16 @@ fun printLinks() {
     File(archivesDir).listFiles()?.toList()?.parallelStream()
         ?.forEach { archive ->
             try {
-                fetchLinks(archive)?.forEach { htmlLinkStream: Stream<Stream<Link?>?>? ->
+                fetchLinks(archive)?.forEach { htmlLinkStream: Stream<Link?>? ->
                     try {
-                        htmlLinkStream?.forEach { linkStream: Stream<Link?>? ->
-                            try {
-                                linkStream?.forEach { link: Link? ->
-                                    if (link != null) {
-                                        val hash = link.hashCode()
-                                        if (hash !in previouslySeenLinks) {
-                                            previouslySeenLinks.add(hash)
-                                            println(link)
-                                        }
-                                    }
-                                }
-                            } catch (e: Exception) {
-//                                System.err.println("Error reading stream $e")
+                        htmlLinkStream?.forEach { link: Link? ->
+                            if (link != null) {
+                                    println(link)
                             }
                         }
                     } catch (e: Exception) {
-//                        System.err.println("Error reading linkStream $e")
+//                                System.err.println("Error reading stream $e")
+                        e.printStackTrace()
                     }
                 }
             } catch (e: Exception) {
@@ -172,11 +166,9 @@ fun printLinks() {
  * not catch links whose surrounding context spans more than a single line.
  */
 
-private fun fetchLinks(archive: File): Stream<Stream<Stream<Link?>?>?>? =
+private fun fetchLinks(archive: File): Stream<Stream<Link?>?>? =
     archive.getHtmlFiles()?.map { file ->
-        file.content.inputStream.bufferedReader(UTF_8).lines().map { line ->
-            line.getAllLinks(relativeTo = file)
-        }
+        file.asHtmlDoc()?.getAllLinks(relativeTo = file)
     }
 
 fun File.getHtmlFiles(): Stream<FileObject>? =
@@ -191,9 +183,7 @@ fun File.getHtmlFiles(): Stream<FileObject>? =
 //                                      LINK URI       FRAGMENT              ANCHOR TEXT
 val linkRegex = Regex("<a[^<>]*href=\"([^<>#:?\"]*?)(#[^<>#:?\"]*)?\"[^<>]*>([!-;?-~]{6,$MAX_LTEXT_LEN})</a>")
 val asciiRegex = Regex("[ -~]*")
-val window = 240
-val minCtx = 8
-val previouslySeenLinks = ConcurrentHashMap.newKeySet<Int>()
+val previouslySeen = ConcurrentHashMap.newKeySet<Int>()
 
 /**
  * Returns all HTML links within a string whose anchor text is shorter than the string
@@ -202,68 +192,65 @@ val previouslySeenLinks = ConcurrentHashMap.newKeySet<Int>()
  * to a document path, and validated so that all links returned point to a valid URL.
  */
 
-private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
-    linkRegex.findAll(this).asStream().map { result ->
-        result.destructured.let { regexGroups ->
-            try {
-                val targetUri = regexGroups.component1().let {
-                    // Support self-links to the same page where link occurs
-                    if (it.isEmpty()) relativeTo.name.baseName else it
-                }
-                val resolvedLink = relativeTo.parent.resolveFile(targetUri)
-                val linkText = Parser.parse(regexGroups.component3(), "").text().normalize()
-                val srcCtx = Parser.parse(this, "").text().normalize()
-                if ((linkText.length + minCtx) < srcCtx.length && srcCtx.matches(asciiRegex)) {
-                    val targetFragment = regexGroups.component2().trim()
-                    val targetDoc = resolvedLink.asHtmlDoc(resolvedLink.url.path)
-                    val targetDocHits = targetDoc?.search(linkText, targetFragment, false)!!.toList()
+private fun Document.getAllLinks(relativeTo: FileObject): Stream<Link?> =
+    select("a[href]").stream().map { linkTag ->
+        try {
+            if (!linkTag.outerHtml().matches(linkRegex)) return@map null
+            val linkText = linkTag.text().normalize()
+            val hash = (linkText + relativeTo.toString()).hashCode()
+            if (hash in previouslySeen) return@map null else previouslySeen.add(hash)
+            val sourceDocHits = search(linkText).toList()
+            val targetUri = linkTag.attr("href")
+            val resolvedLink = relativeTo.parent.resolveFile(targetUri)
+            val targetDoc = resolvedLink.asHtmlDoc(resolvedLink.url.path)
+            val targetFragment = if (targetUri.contains("#")) targetUri.substringAfterLast("#") else ""
+            val targetDocHits = targetDoc?.search(linkText, targetFragment)?.toList() ?: emptyList()
 
-                    if (MIN_TARG_HITS < targetDocHits.size) {
-                        // Finds middlemost hit in line to maximize surrounding context
-                        val middlemostHit = Regex(linkText).findAll(srcCtx)
-                            .minBy { abs(it.range.first - (srcCtx.length / 2)) }!!.range
-                        val startIdx = (middlemostHit.first - window / 2).coerceAtLeast(0)
-                        val endIdx = (middlemostHit.last + window / 2).coerceAtMost(srcCtx.length)
-                        val preText = srcCtx.substring(startIdx until middlemostHit.first)
-                        val subText = srcCtx.substring((middlemostHit.last + 1)..endIdx)
-                        val targetDocTitle = targetDoc.title() ?: ""
-                        val sourceDocTitle = relativeTo.asHtmlDoc()?.title() ?: ""
+            val sourceTitle = title()
+            val targetTitle = targetDoc?.title() ?: ""
+            if (!(sourceTitle + targetTitle).matches(asciiRegex)) return@map null
 
-                        Link(
-                            sourceUri = relativeTo.toString(),
-                            targetUri = resolvedLink.toString(),
-                            targetFragment = targetFragment,
-                            linkText = linkText,
-                            sourcePretext = preText,
-                            sourceSubtext = subText,
-                            targetContext = targetDocHits,
-                            targetTitle = targetDocTitle,
-                            sourceTitle = sourceDocTitle
-                        )
-                    } else null
-                } else null
-            } catch (e: Exception) {
-                null
-            }
+            if (MIN_KWIC_HITS < sourceDocHits.size && MIN_KWIC_HITS < targetDocHits.size) {
+                Link(
+                    linkText = linkText,
+                    sourceHitCount = sourceDocHits.size,
+                    targetHitCount = targetDocHits.size,
+                    sourceTitle = title(),
+                    targetTitle = targetDoc?.title() ?: "",
+                    sourceContext = sourceDocHits,
+                    targetContext = targetDocHits,
+                    sourceUri = relativeTo.toString(),
+                    targetUri = resolvedLink.toString().substringBeforeLast("#"),
+                    targetFragment = targetFragment
+                )
+            } else null
+        } catch (ex: Exception) {
+            null
         }
     }
 
 fun String.normalize() = replace(Regex("\\s\\s+"), " ").trim()
 
-fun Document.search(query: String, fragment: String, isLiteral: Boolean, bufferLen: Int = window): Sequence<String> =
-    (if (fragment.isNotEmpty()) extractFragmentText(fragment) else body().text()).normalize()
-        .split("\n").run {
-            if (isLiteral) extractLiteralHits(query, bufferLen)
-            else FuzzySearch.extractTop(query, this, 30, 60).map { it.string.trim() }.asSequence()
+fun Document.search(query: String, fragment: String = "", bufferLen: Int = MAX_CONTS_LEN) =
+    (if (fragment.isNotEmpty()) extractFragmentText(fragment) else body().text()).normalize().let { docText ->
+        Regex(Regex.escape(query)).findAll(docText).map { matchResult ->
+            docText.substring(
+                (matchResult.range.first - bufferLen).coerceAtLeast(0), matchResult.range.first
+            ) + " <<LTX>> " +
+                    docText.substring(
+                        matchResult.range.last + 1, ((matchResult.range.last + bufferLen)
+                            .coerceAtMost(docText.length))
+                    )
+        }.filter {
+            it.matches(asciiRegex)
+//                && previouslySeen.run {
+//                val hash = (query + it + this@search).hashCode()
+//                val cont = !contains(hash)
+//                add(hash)
+//                !cont
+//            }
         }
-
-fun List<String>.extractLiteralHits(query: String, bufferLen: Int): Sequence<String> = map { line ->
-    Regex(Regex.escape(query)).findAll(line).map { mr ->
-        (line.substring((mr.range.first - bufferLen).coerceAtLeast(0)) +
-                " <<HIT>> " +
-                line.substring((mr.range.last + bufferLen).coerceAtMost(line.length)))
-    }
-}.asSequence().flatten().take(30)
+    }.take(99)
 
 private fun Document.extractFragmentText(fragment: String): String =
     select(fragment)?.first()?.parents()
@@ -273,6 +260,6 @@ private fun Document.extractFragmentText(fragment: String): String =
         ?.joinToString("") { it.text() } ?: body().text()
 
 fun main(args: Array<String>) {
-    if(args.isNotEmpty()) PRETTY_PRINT = true
+    if (args.isNotEmpty()) PRETTY_PRINT = true
     printLinks()
 }
