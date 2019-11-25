@@ -99,7 +99,7 @@ data class Link(
         let { if (MAX_CONTS_LEN < length) it.takeLast(MAX_CONTS_LEN) else it.padStart(MAX_CONTS_LEN, ' ') }
 
     private fun String.prettySubtext() =
-        let { if (MAX_CONTS_LEN < length) it.substring(0, MAX_CONTS_LEN) else it.padEnd(MAX_CONTS_LEN, ' ') }
+        let { if (MAX_CONTS_LEN < length) it.take(MAX_CONTS_LEN) else it.padEnd(MAX_CONTS_LEN, ' ') }
 
     private fun prettyHit(it: String) =
         it.split(" <<HIT>> ").let { it.first().trim().prettyPretext() + " <<HIT>> " + it.last().trim().prettySubtext() }
@@ -217,7 +217,7 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
                     val targetDoc = resolvedLink.asHtmlDoc(resolvedLink.url.path)
                     val targetDocText = targetDoc?.search(linkText, targetFragment, false)!!.toList()
 
-                    if (targetDocText.isNotEmpty()) {
+                    if (targetDocText.size > 3) {
                         // Finds middlemost hit in line to maximize surrounding context
                         val middleIndex = Regex(linkText).findAll(context)
                             .minBy { abs(it.range.first - context.length / 2) }!!.range.first
