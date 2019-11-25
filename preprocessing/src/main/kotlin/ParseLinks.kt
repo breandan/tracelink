@@ -108,13 +108,14 @@ data class Link(
 val MAX_LTEXT_LEN = 50
 val MAX_TITLE_LEN = 100
 val MAX_CONTS_LEN = 120
+val MIN_TARG_HITS = 1
 var PRETTY_PRINT = false
 
 fun String.toFullPath() = "tgz:file://$archivesDir${this.substringBeforeLast("%")}"
 
 fun String.noTabs() = this.replace("\t", "  ")
 
-val archivesDir: String = "python/" // Parent directory (assumed to contain `.tgz` files)
+val archivesDir: String = "archives/" // Parent directory (assumed to contain `.tgz` files)
 val archivesAbs: String = File(archivesDir).absolutePath
 
 /**
@@ -191,7 +192,7 @@ fun File.getHtmlFiles(): Stream<FileObject>? =
 val linkRegex = Regex("<a[^<>]*href=\"([^<>#:?\"]*?)(#[^<>#:?\"]*)?\"[^<>]*>([!-;?-~]{6,$MAX_LTEXT_LEN})</a>")
 val asciiRegex = Regex("[ -~]*")
 val window = 240
-val minCtx = 5
+val minCtx = 8
 val previouslySeenLinks = ConcurrentHashMap.newKeySet<Int>()
 
 /**
@@ -211,20 +212,20 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
                 }
                 val resolvedLink = relativeTo.parent.resolveFile(targetUri)
                 val linkText = Parser.parse(regexGroups.component3(), "").text().normalize()
-                val context = Parser.parse(this, "").text().normalize()
-                if (context.length > (linkText.length + minCtx) && context.matches(asciiRegex)) {
+                val srcCtx = Parser.parse(this, "").text().normalize()
+                if ((linkText.length + minCtx) < srcCtx.length && srcCtx.matches(asciiRegex)) {
                     val targetFragment = regexGroups.component2().trim()
                     val targetDoc = resolvedLink.asHtmlDoc(resolvedLink.url.path)
-                    val targetDocText = targetDoc?.search(linkText, targetFragment, false)!!.toList()
+                    val targetDocHits = targetDoc?.search(linkText, targetFragment, false)!!.toList()
 
-                    if (targetDocText.size > 3) {
+                    if (MIN_TARG_HITS < targetDocHits.size) {
                         // Finds middlemost hit in line to maximize surrounding context
-                        val middleIndex = Regex(linkText).findAll(context)
-                            .minBy { abs(it.range.first - context.length / 2) }!!.range.first
-                        val startIdx = (middleIndex - window / 2).coerceAtLeast(0)
-                        val endIdx = (middleIndex + linkText.length + window / 2).coerceAtMost(context.length)
-                        val preText = context.substring(startIdx, middleIndex)
-                        val subText = context.substring(middleIndex + linkText.length, endIdx).padEnd(window / 2, ' ')
+                        val middlemostHit = Regex(linkText).findAll(srcCtx)
+                            .minBy { abs(it.range.first - (srcCtx.length / 2)) }!!.range
+                        val startIdx = (middlemostHit.first - window / 2).coerceAtLeast(0)
+                        val endIdx = (middlemostHit.last + window / 2).coerceAtMost(srcCtx.length)
+                        val preText = srcCtx.substring(startIdx until middlemostHit.first)
+                        val subText = srcCtx.substring((middlemostHit.last + 1)..endIdx)
                         val targetDocTitle = targetDoc.title() ?: ""
                         val sourceDocTitle = relativeTo.asHtmlDoc()?.title() ?: ""
 
@@ -235,7 +236,7 @@ private fun String.getAllLinks(relativeTo: FileObject): Stream<Link?>? =
                             linkText = linkText,
                             sourcePretext = preText,
                             sourceSubtext = subText,
-                            targetContext = targetDocText,
+                            targetContext = targetDocHits,
                             targetTitle = targetDocTitle,
                             sourceTitle = sourceDocTitle
                         )
