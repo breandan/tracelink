@@ -113,8 +113,8 @@ def getVAEModel(dataset, original_dim_inputs, intermediate_dim, latent_dim, batc
     vae.fit(x_train, epochs=epochs, batch_size=batch_size, validation_data=(x_test, None), verbose=0)
 
     #save the model
-    vae.save('vae_model.h5')
-    encoder.save('vae_encoder_model.h5')
+    vae.save('vae_model_targets.h5')
+    encoder.save('vae_encoder_model_targets.h5')
 
     return vae
 
@@ -128,7 +128,7 @@ def encodeVAE(dataset,original_dim_inputs,batch_size):
             dataset_encoded: the dataset encoded with the vae
     """
 
-    encoder = load_model('vae_encoder_model.h5')
+    encoder = load_model('vae_encoder_model_targets.h5')
     original_dim = original_dim_inputs
     dataset = np.reshape(dataset, [-1, original_dim])
 
@@ -240,7 +240,7 @@ def vaeGenerator(dataset, original_dim_inputs, intermediate_dim, latent_dim, bat
     return output_gen
 
 
-dataset=pd.read_csv("data3/link_context.csv")
+dataset=pd.read_csv("data3/target_context.csv")
 dataset.drop(dataset.columns[[0]], axis=1, inplace=True)
 print(dataset)
 print(dataset.shape)
@@ -255,4 +255,4 @@ getVAEModel(dataset, 768, 350, 50, 20, 10)
 encoded_data=encodeVAE(dataset,768,100)
 print(encoded_data)
 
-encoded_data.to_csv(saveNames("dataset_link_context_encoded.csv")
+encoded_data.to_csv(saveNames("dataset_target_context_encoded.csv")
