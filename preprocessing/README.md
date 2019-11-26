@@ -8,25 +8,70 @@ To run the preprocessor, JDK 1.8+ and Python 3+ are required.
 
 1. Run `python `[`./downloader.py`](https://github.com/breandan/tracelink/blob/master/preprocessing/downloader.py) to download `.tgz` files into the `archives/` directory.
 
-2. Run `./gradlew ParseLinks > dataset.csv` to extract the links.
+2. Run `./gradlew ParseLinks -q [-Pretty] > dataset.csv` to extract the links. The optional `-Pretty` flag indicates whether the output should be padded.
 
 3. Run `./gradlew ParseDocs` to build the Lucene index.
 
 ## Extraction
 
-The following regular expression was used to extract links on a [per-line](https://github.com/breandan/tracelink/blob/69d3207f1ed67520f32ca8c1670cbcd40970b897/preprocessing/src/main/kotlin/ParseLinks.kt#L63) basis:
+The following regular expression was used to extract links:
 
 ```regex
-//               LINK URI      FRAGMENT              ANCHOR TEXT
-<a[^<>]*href=\"([^<>#:?\"]*?)(#[^<>#:?\"]*)?\"[^<>]*>([!-;?-~]{6,})</a>
+
 ```
 
 All links are validated and point to a known document in the same docset.
 
-## Deduplication procedure
-
-Links with identical source and target context, pointing to the same target URL are considered duplicates:
+# Python Docsets
 
 ```
-q -t -H -U "select link_text, context, target_context, target_document, link_fragment from tabs_no_quotes.csv group by link_text, context, target_context, target_document, link_fragment" > deduped.csv
+Airflow.tgz
+Angr.tgz
+Astropy.tgz
+Cython.tgz
+GAE-Python.tgz
+Google_Cloud_Client-Python.tgz
+Keras.tgz
+Kivy.tgz
+MNE.tgz
+Mrjob.tgz
+NLTK.tgz
+Numba.tgz
+Peewee.tgz
+PyGame.tgz
+PyGraphviz.tgz
+PyInstaller.tgz
+PyMel.tgz
+PyMongo.tgz
+PyTables.tgz
+PyTorch.tgz
+Pydial.tgz
+Pygments.tgz
+Pyramid.tgz
+Pythonista.tgz
+Qt_for_Python.tgz
+Requests.tgz
+Scikit-image.tgz
+Scrapy.tgz
+Seaborn.tgz
+Six.tgz
+Sphinx.tgz
+SymPy.tgz
+TensorFlow.tgz
+Theano.tgz
+click.tgz
+cvxpy.tgz
+formencode.tgz
+gensim.tgz
+lxml.tgz
+mlpy.tgz
+pymatgen.tgz
+pyro.tgz
+pysam.tgz
+pyside2.tgz
+pyspark.tgz
+pytest.tgz
+python-telegram-bot.tgz
+scikit-learn.tgz
+wxPython.tgz
 ```

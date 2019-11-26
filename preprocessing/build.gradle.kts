@@ -29,6 +29,7 @@ tasks {
     listOf("ParseDocs", "ParseLinks")
         .forEach {
             register(it, JavaExec::class) {
+                findProperty("retty")?.let { args = listOf("1") }
                 main = "${it}Kt"
                 classpath = sourceSets["main"].runtimeClasspath
             }

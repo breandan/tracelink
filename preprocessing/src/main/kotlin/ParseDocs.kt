@@ -13,6 +13,7 @@ import org.apache.lucene.store.MMapDirectory
 import org.jsoup.parser.Parser
 import java.io.File
 import java.nio.charset.StandardCharsets.UTF_8
+import java.util.stream.Stream
 import kotlin.system.measureTimeMillis
 
 data class Doc(
@@ -27,7 +28,7 @@ val analyzer = StandardAnalyzer()
 val index = MMapDirectory(File("index").toPath())
 val config = IndexWriterConfig(analyzer).apply { setOpenMode(CREATE) }
 
-fun FileObject.asHtmlDoc(uri: String) =
+fun FileObject.asHtmlDoc(uri: String = "") =
     try {
         Parser.parse(content.getString(UTF_8), uri)
     } catch (e: Exception) {
@@ -35,9 +36,13 @@ fun FileObject.asHtmlDoc(uri: String) =
     }
 
 fun parseDocs() =
-    File(archivesDir).listFiles()!!.asList()
-        .parallelStream()
-        .map { it.getHtmlFiles()?.map { file -> file.asHtmlDoc("${file.url}")?.let { jDocToDoc(it) } } }
+    File(archivesDir).listFiles()!!.sortedBy { -it.length() }.parallelStream()
+        .map {
+            it.getHtmlFiles()?.map { file ->
+                file.asHtmlDoc("${file.url}")
+                    ?.let { jDocToDoc(it) }
+            }
+        }
 
 fun main() {
     indexDocs()
@@ -45,23 +50,34 @@ fun main() {
     println("Query took: " + measureTimeMillis { query("test") } + " ms")
 }
 
+val timeLimit = 84000000
+
 private fun indexDocs() {
     var t = 0
     val iw = IndexWriter(index, config)
-    parseDocs().forEach { docStream ->
-        docStream?.forEach { doc ->
-            doc?.run { iw.addDoc(this); t += 1; if (t % 1000 == 0) println("Indexed $uri") }
+    val startTime = System.currentTimeMillis()
+
+    parseDocs().forEach { docStream: Stream<Doc?>? ->
+        if (System.currentTimeMillis() - startTime > timeLimit) return@forEach
+
+        docStream?.forEach { doc: Doc? ->
+            if (System.currentTimeMillis() - startTime > timeLimit) return@forEach
+            doc?.run {
+                iw.addDoc(this); t += 1;
+                if (t % 1000 == 0) println("Indexed $uri")
+            }
         }
     }
+
     iw.close()
 }
 
 private fun jDocToDoc(it: org.jsoup.nodes.Document): Doc {
     val uri = it.baseUri()
     val title = try {
-        it.title().run { if (isBlank()) "EMPTY_TITLE" else this }
+        it.title()
     } catch (e: Exception) {
-        "EMPTY_TITLE"
+        ""
     }
 
     val contents = it.text()
