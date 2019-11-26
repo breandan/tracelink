@@ -7,17 +7,28 @@ Some simple regression models acting as baselines.
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 from sklearn.cross_decomposition import CCA
+from sklearn.linear_model import RidgeCV
 # A model that concatenate multiple other model:
 class chain():
     def __init__(self,models,args):
         self.models = []
         for m,arg in zip(models,args):
-            self.models +=[m(args)]
+            if type(arg)==list:
+                self.models +=[m(*arg)]
+            else:
+                self.models +=[m(arg)]
     def fit(self,query,target):
         a,b = query,target
         for m in self.models:
             a,b = m(a,b)
         return a,b
+    def __str__(self):
+        model_str = [str(m) for m in self.models]
+        name = "Chain["
+        for s in model_str:
+            name+=s
+        name+="]"
+        return name
 
 #raw dimension reductions model
 class tsneModel():
@@ -27,6 +38,8 @@ class tsneModel():
         target_vectors = self.tsne.fit_transform(target)
         query_vectors = self.tsne.fit_transform(query)
         return query_vectors,target_vectors
+    def __str__(self):
+        return "tsne("+str(self.tsne.n_components)+")"
 class ccaModel():
     def __init__(self,num_dimensions):
         self.cca = CCA(n_components=num_dimensions)
@@ -34,6 +47,8 @@ class ccaModel():
         self.cca.fit(query,target)
         query_vectors,target_vectors = self.cca.transform(query,target)
         return query_vectors,target_vectors
+    def __str__(self):
+        return "cca("+str(self.cca.n_components)+")"
 class pcaModel():
     def __init__(self,num_dimensions):
         self.pca = PCA(n_components=num_dimensions)
@@ -42,6 +57,8 @@ class pcaModel():
         query_vectors = self.pca.transform(query)
         target_vectors = self.pca.transform(target)
         return query_vectors,target_vectors
+    def __str__(self):
+        return "pca("+str(self.pca.n_components)+")"
 
 import torch
 from torch import nn
@@ -88,3 +105,17 @@ class nnRegression():
                 output_test = self.model(X_c_train_batch_tensor[-1])
                 print(loss_fn(output_test,Y_c_train_batch[-1]))
         return self.model(query),target #the target is not modified here...
+    def __str__(self):
+        return self.model.__str__()
+
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import RBF
+class gpRegression():
+    def __init__(self):
+        self.gpRegressor = GaussianProcessRegressor(RBF(),random_state=0) #todo: hyperparameter tuning over the kernel
+    def fit(self,query,target):
+        self.gpRegressor.fit(query,target)
+        print("Gaussian process regressor training loss is",self.gpRegressor.score(query,target))
+        return self.gpRegressor.predict(query),target
+    def __str__(self):
+        return self.gpRegressor.__str__()

@@ -20,17 +20,38 @@ import numpy as np
 class FilteredKnn():
     def __init__(self,data):
         self.wordToDoc = {} #For each link: a heap containing elements like (frequency,docIDX)
-        for idx,word in tqdm(enumerate(data.values[:,0])):
+        for idx,word in tqdm(enumerate(data.values[:,0])): #1000 element: 0.2 sc
+            word=str(word)
             self.wordToDoc[word] = (idx,[])
             for idxDoc,target_doc in enumerate(data.values[:,2]):
-                heapq.heappush(self.wordToDoc[word][1],(target_doc.count(word),idxDoc,idx))
+                count = target_doc.count(word)
+                if count>0:
+                    heapq.heappush(self.wordToDoc[word][1],(count,idxDoc,idx))
     def measure_knn_acc(self,T,k,L,EQ,ED):
-        score = 0
+        score = 0.
         for idx,Eq in tqdm(enumerate(EQ)):
-            filteredDocIdx = [v[1] for v in self.wordToDoc[L[idx]][1][:T]]
+            word = str(L[idx])
+            filteredDocIdx = np.array([v[1] for v in self.wordToDoc[word][1][:T]])
             distances = np.sum(np.square(Eq - ED[filteredDocIdx]),axis=1)
             ranking = np.argsort(distances) #will fail because now distances has less element.... so we need to retrieve the real idx...
             realRanking = filteredDocIdx[ranking] #retrieve the real ranking idx.
-            if self.wordToDoc[L[idx]][0] in realRanking[:k]:
-                score +=1
+            if self.wordToDoc[word][0] in realRanking[:k]:
+                score +=1.
         return score/EQ.shape[0]
+    def raw_tf_accuracy(self,t,k,L,display=False):
+        score = 0.
+        if display:
+            for idx,l in tqdm(enumerate(L)):
+                word = str(l)
+                filteredDocIdx = np.array([v[1] for v in self.wordToDoc[word][1][:t]])
+                linkIdx = self.wordToDoc[word][0]
+                if linkIdx in filteredDocIdx[:k]:
+                    score +=1.
+        else:
+            for idx,l in enumerate(L):
+                word = str(l)
+                filteredDocIdx = np.array([v[1] for v in self.wordToDoc[word][1][:t]])
+                linkIdx = self.wordToDoc[word][0]
+                if linkIdx in filteredDocIdx[:k]:
+                    score +=1.
+        return score/L.shape[0]
