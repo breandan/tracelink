@@ -1,3 +1,4 @@
+import com.google.common.collect.EvictingQueue
 import org.apache.commons.vfs2.AllFileSelector
 import org.apache.commons.vfs2.FileObject
 import org.apache.commons.vfs2.VFS
@@ -32,36 +33,38 @@ data class Link(
         line: String, parsed: Array<String> = line.split("\t")
             .map { it.trim() }.toTypedArray()
     ) : this(
-        parsed[0].normalize(),
-        Integer.valueOf(parsed[1]),
-        Integer.valueOf(parsed[2]),
-        parsed[3].trim(),
-        parsed[4].trim(),
-        parsed[5].split(" <<LTX>> "),
-        parsed[6].split(" … ").map { it.trim() },
-        parsed[7].toFullPath(),
-        parsed[8].toFullPath(),
-        parsed[9]
+        linkText = parsed[0].normalize(),
+        sourceHitCount = Integer.valueOf(parsed[1]),
+        targetHitCount = Integer.valueOf(parsed[2]),
+        sourceTitle = parsed[3].trim(),
+        targetTitle = parsed[4].trim(),
+        sourceContext = parsed[5].split(Regex(" <<[A-Z]+>> ")),
+        targetContext =parsed[6].split(" … ").map { it.trim() },
+        sourceUri = parsed[7].toFullPath(),
+        targetUri = parsed[8].toFullPath(),
+        targetFragment = parsed[9]
     )
 
-    private fun String.compact(prefixLength: Int = archivesAbs.length + 11) = substring(prefixLength)
+    val archive: String = targetUri.substringAfter(archivesAbs).drop(1).substringBefore("/")
+
+    private fun String.compact(prefixLength: Int = archivesAbs.length) = substring(prefixLength)
+
+    fun pretty(): String = linkText.noTabs().prettyText() + "\t" +
+            sourceHitCount.toString().padStart(2, ' ') + "\t" +
+            targetHitCount.toString().padStart(4, ' ').padEnd(6, ' ') + "\t" +
+            sourceTitle.noTabs().prettyTitle() + "\t" +
+            targetTitle.noTabs().prettyTitle() + "\t" +
+            sourceContext.joinToString(" … ") { prettyHit(it.replace("…", "...")) }.padEnd(2000, ' ') + "\t" +
+            targetContext.joinToString(" … ") { prettyHit(it.replace("…", "...")) }.padEnd(2000, ' ') + "\t" +
+            sourceUri.compact() + "\t" +
+            targetUri.compact() + "\t" +
+            targetFragment
 
     override fun toString(): String =
-        if (PRETTY_PRINT) {
-            linkText.noTabs().prettyText() + "\t" +
-                    sourceHitCount.toString().padStart(2, ' ') +
-                    targetHitCount.toString().padStart(4, ' ').padEnd(6, ' ') +
-                    sourceTitle.noTabs().prettyTitle() + "\t" +
-                    targetTitle.noTabs().prettyTitle() + "\t" +
-                    sourceContext.joinToString(" … ") { prettyHit(it.replace("…", "...")) }.padEnd(2000, ' ') + "\t" +
-                    targetContext.joinToString(" … ") { prettyHit(it.replace("…", "...")) }.padEnd(2000, ' ') + "\t" +
-                    sourceUri.compact() + "\t" +
-                    targetUri.compact() + "\t" +
-                    targetFragment
-        } else {
+        if (PRETTY_PRINT) { pretty() } else {
             linkText.noTabs() + "\t" +
-                    sourceHitCount.toString() +
-                    targetHitCount.toString() +
+                    sourceHitCount.toString() + "\t" +
+                    targetHitCount.toString() + "\t" +
                     sourceTitle.noTabs() + "\t" +
                     targetTitle.noTabs() + "\t" +
                     sourceContext.joinToString(" … ") { it.replace("…", "...").noTabs() } + "\t" +
@@ -112,31 +115,32 @@ val MIN_KWIC_LEN = 8
 
 var PRETTY_PRINT = false
 
-fun String.toFullPath() = "tgz:file://$archivesDir${this.substringBeforeLast("%")}"
+fun String.toFullPath() = "$archivesAbs${this.substringBeforeLast("%")}"
 
 fun String.noTabs() = this.replace("\t", "  ")
 
-val archivesDir: String = "archives/" // Parent directory (assumed to contain `.tgz` files)
-val archivesAbs: String = File(archivesDir).absolutePath
+val archivesDir: String = "python" // Parent directory (assumed to contain `.tgz` files)
+val archivesAbs: String = "tgz:file://" + File(archivesDir).absolutePath
 
 /**
  * Extracts documents from archives in parallel and prints the links in CSV format.
  */
 
-fun printLinks() {
-    println(
-        "link_text\t" +
-                "source_hit_count\t" +
-                "target_hit_count\t" +
-                "source_title\t" +
-                "target_title\t" +
-                "source_context\t" +
-                "target_context\t" +
-                "source_document\t" +
-                "target_document\t" +
-                "link_fragment"
-    )
+val LINK_CSV_HEADER = "link_text\t" +
+        "source_hit_count\t" +
+        "target_hit_count\t" +
+        "source_title\t" +
+        "target_title\t" +
+        "source_context\t" +
+        "target_context\t" +
+        "source_document\t" +
+        "target_document\t" +
+        "link_fragment"
 
+fun printLinks() {
+    println(LINK_CSV_HEADER)
+
+    // Be careful to catch exceptions in each substream so we do not crash or skip results prematurely.
     File(archivesDir).listFiles()?.toList()?.parallelStream()
         ?.forEach { archive ->
             try {
@@ -180,8 +184,15 @@ fun File.getHtmlFiles(): Stream<FileObject>? =
         null
     }
 
-//                                      LINK URI       FRAGMENT              ANCHOR TEXT
-val linkRegex = Regex("<a[^<>]*href=\"([^<>#:?\"]*?)(#[^<>#:?\"]*)?\"[^<>]*>([!-;?-~]{6,$MAX_LTEXT_LEN})</a>")
+val MIN_ALPHANUMERICS = 5
+//                          ALLOW BALANCED PUNCTUATION UP TO ONE LEVEL OF NESTING ONLY
+val BALANCED_BRACKETS = "((\\([^\\(\\)]\\))|(\\[[^\\[\\]]\\])|(\\{[^\\{\\}]\\})|(<[^<>]>)|(\"[^\"]\")|('[^']'))*"
+//                   ANYTHING BUT: '"()[]{}<>                            ANYTHING BUT: '"()[]{}<>
+val TEXT_OR_CODE = "[^'\"\\s\\(\\)\\{\\}\\[\\]<>]*[a-zA-Z._:&@#\\*~]{$MIN_ALPHANUMERICS,}[^'\"\\s\\(\\)\\{\\}\\[\\]<>]*"
+val VALID_PHRASE = "$TEXT_OR_CODE$BALANCED_BRACKETS($TEXT_OR_CODE)*"
+//                                      LINK URI       FRAGMENT               ANCHOR TEXT
+val LINK_REGEX = Regex("<a[^<>]*href=\"([^<>#:?\"]*?)(#[^<>#:?\"]*)?\"[^<>]*>($VALID_PHRASE)</a>")
+
 val asciiRegex = Regex("[ -~]*")
 val previouslySeen = ConcurrentHashMap.newKeySet<Int>()
 
@@ -195,7 +206,7 @@ val previouslySeen = ConcurrentHashMap.newKeySet<Int>()
 private fun Document.getAllLinks(relativeTo: FileObject): Stream<Link?> =
     select("a[href]").stream().map { linkTag ->
         try {
-            if (!linkTag.outerHtml().matches(linkRegex)) return@map null
+            if (!linkTag.outerHtml().matches(LINK_REGEX) || MAX_LTEXT_LEN < linkTag.text().length) return@map null
             val linkText = linkTag.text().normalize()
             val hash = (linkText + relativeTo.toString()).hashCode()
             if (hash in previouslySeen) return@map null else previouslySeen.add(hash)
@@ -241,15 +252,14 @@ fun Document.search(query: String, fragment: String = "", bufferLen: Int = MAX_C
                         matchResult.range.last + 1, ((matchResult.range.last + bufferLen)
                             .coerceAtMost(docText.length))
                     )
-        }.filter {
-            it.matches(asciiRegex)
+        }.filter { it.matches(asciiRegex) }
 //                && previouslySeen.run {
 //                val hash = (query + it + this@search).hashCode()
 //                val cont = !contains(hash)
 //                add(hash)
 //                !cont
 //            }
-        }
+//        }
     }.take(99)
 
 private fun Document.extractFragmentText(fragment: String): String =
@@ -262,4 +272,5 @@ private fun Document.extractFragmentText(fragment: String): String =
 fun main(args: Array<String>) {
     if (args.isNotEmpty()) PRETTY_PRINT = true
     printLinks()
+    System.err.println("FINISHED")
 }

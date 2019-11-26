@@ -14,10 +14,20 @@ To run the preprocessor, JDK 1.8+ and Python 3+ are required.
 
 ## Extraction
 
-The following regular expression was used to extract links:
+The following regular expressions are used for link extraction:
 
 ```regex
+val MIN_ALPHANUMERICS = 5
+//                          ALLOW BALANCED PUNCTUATION UP TO ONE LEVEL OF NESTING ONLY
+val BALANCED_BRACKETS = "((\\([^\\(\\)]\\))|(\\[[^\\[\\]]\\])|(\\{[^\\{\\}]\\})|(<[^<>]>)|(\"[^\"]\")|('[^']'))*"
+//                   ANYTHING BUT: '"()[]{}<>                            ANYTHING BUT: '"()[]{}<>
+val TEXT_OR_CODE = "[^'\"\\s\\(\\)\\{\\}\\[\\]<>]*[a-zA-Z._:&@#\\*~]{$MIN_ALPHANUMERICS,}[^'\"\\s\\(\\)\\{\\}\\[\\]<>]*"
+val VALID_PHRASE = "$TEXT_OR_CODE$BALANCED_BRACKETS($TEXT_OR_CODE)*"
+//                                      LINK URI       FRAGMENT               ANCHOR TEXT
+val LINK_REGEX = Regex("<a[^<>]*href=\"([^<>#:?\"]*?)(#[^<>#:?\"]*)?\"[^<>]*>($VALID_PHRASE)</a>")
 
+val asciiRegex = Regex("[ -~]*")
+val previouslySeen = ConcurrentHashMap.newKeySet<Int>()
 ```
 
 All links are validated and point to a known document in the same docset.
