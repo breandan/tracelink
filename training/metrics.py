@@ -38,12 +38,20 @@ class FilteredKnn():
             if self.wordToDoc[word][0] in realRanking[:k]:
                 score +=1.
         return score/EQ.shape[0]
-    def raw_tf_accuracy(self,T,k,L):
+    def raw_tf_accuracy(self,t,k,L,display=False):
         score = 0.
-        for idx,l in tqdm(enumerate(L)):
-            word = str(l)
-            filteredDocIdx = np.array([v[1] for v in self.wordToDoc[word][1][:T]])
-            linkIdx = self.wordToDoc[word][1]
-            if linkIdx in filteredDocIdx[:k]:
-                score +=1.
+        if display:
+            for idx,l in tqdm(enumerate(L)):
+                word = str(l)
+                filteredDocIdx = np.array([v[1] for v in self.wordToDoc[word][1][:t]])
+                linkIdx = self.wordToDoc[word][0]
+                if linkIdx in filteredDocIdx[:k]:
+                    score +=1.
+        else:
+            for idx,l in enumerate(L):
+                word = str(l)
+                filteredDocIdx = np.array([v[1] for v in self.wordToDoc[word][1][:t]])
+                linkIdx = self.wordToDoc[word][0]
+                if linkIdx in filteredDocIdx[:k]:
+                    score +=1.
         return score/L.shape[0]

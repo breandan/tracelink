@@ -28,9 +28,24 @@ bert_link = data_bert_link.values[:,1:]
 
 #Create the knn filter datastrucutre (includes a word to doc dictionnary)
 filterKnn = metrics.FilteredKnn(data)
+#First let us analyze the baselines
+from matplotlib.cm import  get_cmap
+T = np.arange(1,1000,50)
+K = [1,5,10,25,50]
+L = data.values[:,0]
+score_count_search = np.zeros((len(K),len(T)))
+for idxk,k in enumerate(K):
+    for idxt,t in enumerate(T):
+        score_count_search[idxk,idxt] = filterKnn.raw_tf_accuracy(t,k,L)
+cm = get_cmap("Accent")
+for idxk,k in enumerate(K):
+    plt.plot(T,score_count_search[idxk,:],c=cm(idxk),label=str(k)+"-accuracy")
+plt.legend()
+plt.xlabel("size of initial filtering")
+plt.show()
+
 
 num_dim = 2
-
 #todo build the chains, build the parameter optimizer pipelines
 models = [ sm.tsneModel(num_dim),
            sm.ccaModel(num_dim),
