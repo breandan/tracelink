@@ -29,7 +29,7 @@ class FilteredKnn():
                     heapq.heappush(self.wordToDoc[word][1],(count,idxDoc,idx))
     def measure_knn_acc(self,T,k,L,EQ,ED):
         score = 0.
-        for idx,Eq in tqdm(enumerate(EQ)):
+        for idx,Eq in enumerate(EQ):
             word = str(L[idx])
             filteredDocIdx = np.array([v[1] for v in self.wordToDoc[word][1][:T]])
             distances = np.sum(np.square(Eq - ED[filteredDocIdx]),axis=1)
