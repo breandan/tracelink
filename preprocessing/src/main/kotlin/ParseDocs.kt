@@ -37,10 +37,11 @@ fun FileObject.asHtmlDoc(uri: String = "") =
 
 fun parseDocs() =
     File(archivesDir).listFiles()!!.sortedBy { -it.length() }.parallelStream()
-        .map {
-            it.getHtmlFiles()?.map { file ->
-                file.asHtmlDoc("${file.url}")
-                    ?.let { jDocToDoc(it) }
+        .map { archive ->
+            archive.getHtmlFiles()?.map { file ->
+                file.asHtmlDoc("${file.url}")?.let {
+                    jDocToDoc(it)
+                }
             }
         }
 
