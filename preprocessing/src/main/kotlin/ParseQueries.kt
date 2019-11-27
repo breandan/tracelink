@@ -76,16 +76,17 @@ var links: List<Link>? = null
 
 fun buildIndex(file: String) {
     links = File(file).readLines().drop(1)
-        .take(302)
+        .take(500)
         .parallelStream()
         .map { Link(it).apply { linkCounts.incrementAndGet(linkText) } }
         .collect(Collectors.toList())
 
-    links!!.map { listOf(it.sourceUri, it.targetUri) }
-        .flatten().parallelStream().collect(Collectors.groupingByConcurrent<String, String> { it.archive() }).entries
-        .parallelStream().forEach {
-            it.value.forEachIndexed { idx, document ->
-                if (idx % 100 == 0) System.err.println("Parsed $idx link queries out of ${links?.size} total")
+    links!!.map { listOf(it.sourceUri, it.targetUri) }.flatten().distinct()
+        .parallelStream().collect(Collectors.groupingByConcurrent<String, String> { it.archive() }).entries
+        .parallelStream().forEach { entry ->
+            entry.value.forEachIndexed { idx, document ->
+                if (idx % 20 == 0)
+                    System.err.println("Parsed $idx links of ${entry.value.size} in archive ${entry.key.archiveName()}")
                 val docText = document.targetDoc()?.text() ?: ""
                 Regex("\\s$VALID_PHRASE\\s").findAll(docText).forEach { phrase ->
                     val wholePhrase = phrase.value.drop(1).dropLast(1)
@@ -138,7 +139,7 @@ fun main(args: Array<String>) {
 private fun getLinksWithTopKCandidates(): List<LinkWithCandidates> =
     links!!.map { link -> LinkWithCandidates(link, getCandidatesForQuery(link.linkText)) }
 
-val MIN_FREQ_TO_CACHE_QUERY = 5
+val MIN_FREQ_TO_CACHE_QUERY = 3
 val frequentQueryCache = ConcurrentHashMap<String, List<Triple<String, String, List<String>>>>()
 
 private fun getCandidatesForQuery(query: String) =

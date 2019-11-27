@@ -45,7 +45,7 @@ data class Link(
         targetFragment = parsed[9]
     )
 
-    val archive: String = targetUri.substringAfter(archivesAbs).drop(1).substringBefore("/")
+    val targetArchive: String = targetUri.archiveName()
 
     fun pretty(): String = linkText.noTabs().prettyText() + "\t" +
             sourceHitCount.toString().padStart(2, ' ') + "\t" +
@@ -121,6 +121,7 @@ fun String.noTabs() = this.replace("\t", "  ").replace("\"", "'")
 
 val archivesDir: String = "python" // Parent directory (assumed to contain `.tgz` files)
 val archivesAbs: String = "tgz:file://" + File(archivesDir).absolutePath
+fun String.archiveName() = substringAfter(archivesAbs).drop(1).substringBefore("/")
 
 /**
  * Extracts documents from archives in parallel and prints the links in CSV format.
