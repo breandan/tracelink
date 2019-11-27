@@ -75,7 +75,9 @@ class LinkWithCandidates(val link: Link, var countSearchCandidates: List<Triple<
 var links: List<Link>? = null
 
 fun buildIndex(file: String) {
-    links = File(file).readLines().drop(1).take(300).parallelStream()
+    links = File(file).readLines().drop(1)
+        .take(300)
+        .parallelStream()
         .map { Link(it) }
         .collect(Collectors.toList())
 
