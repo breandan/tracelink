@@ -75,14 +75,15 @@ class LinkWithCandidates(val link: Link, var countSearchCandidates: List<Triple<
 var links: List<Link>? = null
 
 fun buildIndex(file: String) {
-    links = File(file).readLines().drop(1).parallelStream()
+    links = File(file).readLines().drop(1).take(300).parallelStream()
         .map { Link(it) }
         .collect(Collectors.toList())
 
     links!!.map { linkTexts.add(it.linkText); listOf(it.sourceUri, it.targetUri) }
         .flatten().parallelStream().collect(Collectors.groupingByConcurrent<String, String> { it.archive() }).entries
         .parallelStream().forEach {
-            it.value.forEach { document ->
+            it.value.forEachIndexed { idx, document ->
+                if(idx % 100 == 0) System.err.println("Parsed $idx link queries out of ${links?.size} total")
                 val docText = document.targetDoc()?.text() ?: ""
                 Regex("\\s$VALID_PHRASE\\s").findAll(docText).forEach { phrase ->
                     val wholePhrase = phrase.value.drop(1).dropLast(1)
