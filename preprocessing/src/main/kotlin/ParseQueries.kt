@@ -140,7 +140,7 @@ fun main(args: Array<String>) {
 private fun getLinksWithTopKCandidates(): List<LinkWithCandidates> =
     links!!.map { link -> LinkWithCandidates(link, getCandidatesForQuery(link.linkText)) }
 
-val MIN_FREQ_TO_CACHE_QUERY = 3
+val MIN_FREQ_TO_CACHE_QUERY = 2
 val frequentQueryCache = ConcurrentHashMap<String, List<Triple<String, String, List<String>>>>()
 
 private fun getCandidatesForQuery(query: String) =
