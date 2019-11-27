@@ -8,9 +8,9 @@ To run the preprocessor, JDK 1.8+ and Python 3+ are required.
 
 1. Run `python `[`./downloader.py`](https://github.com/breandan/tracelink/blob/master/preprocessing/downloader.py) to download `.tgz` files into the `archives/` directory.
 
-2. Run `./gradlew ParseLinks -q [-Pretty] > dataset.csv` to extract the links. The optional `-Pretty` flag indicates whether the output should be padded.
+2. Run `./gradlew ParseLinks -q [-Pretty] > links.csv` to extract the links. The optional `-Pretty` flag indicates whether the output should be padded.
 
-3. Run `./gradlew ParseDocs` to build the Lucene index.
+3. Run `./gradlew ParseQueries -q -Process= links.csv > links_with_top_k_count_search_candidates.csv` to build the index and compute the count-search results.
 
 ## Extraction
 

@@ -47,8 +47,6 @@ data class Link(
 
     val archive: String = targetUri.substringAfter(archivesAbs).drop(1).substringBefore("/")
 
-    private fun String.compact(prefixLength: Int = archivesAbs.length) = substring(prefixLength)
-
     fun pretty(): String = linkText.noTabs().prettyText() + "\t" +
             sourceHitCount.toString().padStart(2, ' ') + "\t" +
             targetHitCount.toString().padStart(4, ' ').padEnd(6, ' ') + "\t" +
@@ -107,6 +105,8 @@ data class Link(
         it.split(" <<LTX>> ").let { it.first().prettyPretext() + " <<LTX>> " + it.last().prettySubtext() }
 }
 
+fun String.compact(prefixLength: Int = archivesAbs.length) = substring(prefixLength)
+
 val MAX_LTEXT_LEN = 50
 val MAX_TITLE_LEN = 100
 val MAX_CONTS_LEN = 120
@@ -117,7 +117,7 @@ var PRETTY_PRINT = false
 
 fun String.toFullPath() = "$archivesAbs${this.substringBeforeLast("%")}"
 
-fun String.noTabs() = this.replace("\t", "  ")
+fun String.noTabs() = this.replace("\t", "  ").replace("\"", "'")
 
 val archivesDir: String = "python" // Parent directory (assumed to contain `.tgz` files)
 val archivesAbs: String = "tgz:file://" + File(archivesDir).absolutePath

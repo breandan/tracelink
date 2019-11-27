@@ -4,6 +4,7 @@ import com.google.common.collect.ImmutableMultimap
 import com.google.common.collect.Multimaps
 import com.google.common.util.concurrent.AtomicLongMap
 import org.apache.commons.vfs2.VFS
+import org.jsoup.nodes.Document
 import java.io.File
 import java.io.IOException
 import java.io.ObjectOutputStream
@@ -16,14 +17,14 @@ val linkTexts = ConcurrentHashMap.newKeySet<String>()
 
 fun String.archive() = substringAfter(archivesAbs).drop(1).substringBefore("/")
 
-fun String.targetDoc(): String? =
+fun String.targetDoc(): Document? =
     try {
-        VFS.getManager().resolveFile(this)?.asHtmlDoc()?.text()
+        VFS.getManager().resolveFile(this)?.asHtmlDoc() ?: null
     } catch (ex: Exception) {
         null
     }
 
-val WORDS_CTX_LEN = 6
+val WORDS_CTX_LEN = 20
 
 fun <T> Iterator<T>.takeOrEvictFrom(queue: EvictingQueue<T>) {
     if (hasNext()) queue.add(next()) else if (queue.isNotEmpty()) queue.remove()
@@ -61,17 +62,20 @@ fun String.extractConcordances(query: String? = null): List<String> {
     }
 }
 
-class LinkWithCandidates(val link: Link, var countSearchCandidates: List<Pair<String, List<String>>>) {
+class LinkWithCandidates(val link: Link, var countSearchCandidates: List<Triple<String, String, List<String>>>) {
     override fun toString() =
         link.toString() + "\t" + countSearchCandidates.joinToString("\t") {
-            it.first + "\t" + it.second.joinToString(" … ")
+            it.first.compact() + "\t" + it.second + "\t" + it.third.joinToString(" … ").noTabs()
+        }.let {
+            val occurrences = it.count { char -> char == '…' }
+            if (occurrences <= TOP_K_DOCS) it.padEnd(TOP_K_DOCS - occurrences - 1, '\t') else it
         }
 }
 
 var links: List<Link>? = null
 
 fun buildIndex(file: String) {
-    links = File(file).readLines().drop(1).take(100).parallelStream()
+    links = File(file).readLines().drop(1).parallelStream()
         .map { Link(it) }
         .collect(Collectors.toList())
 
@@ -79,7 +83,7 @@ fun buildIndex(file: String) {
         .flatten().parallelStream().collect(Collectors.groupingByConcurrent<String, String> { it.archive() }).entries
         .parallelStream().forEach {
             it.value.forEach { document ->
-                val docText = document.targetDoc() ?: ""
+                val docText = document.targetDoc()?.text() ?: ""
                 Regex("\\s$VALID_PHRASE\\s").findAll(docText).forEach { phrase ->
                     val wholePhrase = phrase.value.drop(1).dropLast(1)
                     wholePhrase.split(Regex("[^A-Za-z]")).forEach { phraseFragment ->
@@ -94,27 +98,43 @@ fun buildIndex(file: String) {
             }
         }
 
-    println("Inverted index contains: ${invertedIndex.size()} elements")
-    println("Top words index contains:")
-    val entries: MutableSet<MutableMap.MutableEntry<String, MutableCollection<String>>> = invertedIndex.asMap().entries
-    entries.sortedBy { -it.value.size }.take(50).forEach { println(it.key.padEnd(20, ' ') + " : " + it.value.size) }
-    println("Phrase-document count contains: ${phraseCounts.size()} elements")
+//    println("Inverted index contains: ${invertedIndex.size()} elements")
+//    println("Top words index contains:")
+//    val entries: MutableSet<MutableMap.MutableEntry<String, MutableCollection<String>>> = invertedIndex.asMap().entries
+//    entries.sortedBy { -it.value.size }.take(50).forEach { println(it.key.padEnd(20, ' ') + " : " + it.value.size) }
+//    println("Phrase-document count contains: ${phraseCounts.size()} elements")
 }
 
-fun String.topDocsMatchingQuery() = invertedIndex[this].sortedBy { -phraseCounts["$this@$it"] }
+val TOP_K_DOCS = 20
+fun String.topDocsMatchingQuery() = invertedIndex[this].sortedBy { -phraseCounts["$this@$it"] }.take(TOP_K_DOCS)
 
 fun main(args: Array<String>) {
     val linksFile = args[0]
     buildIndex(linksFile)
+    System.err.println("Read ${links?.size} links from $linksFile")
     serializeIndex(File("${linksFile.substringBeforeLast(".")}_index_${System.currentTimeMillis()}.idx"))
     serializePhraseCounts(File("${linksFile.substringBeforeLast(".")}_phrases_${System.currentTimeMillis()}.idx"))
+    val linksWithTopKDocs = getLinksWithTopKCandidates()
+    val topKStrings = linksWithTopKDocs.mapNotNull {
+        val trueIdx = it.countSearchCandidates.indexOfFirst { candidate -> candidate.first == it.link.targetUri }
+        if (0 <= trueIdx) trueIdx.toString().padEnd(4) + "\t" + it
+        else { System.err.println("Something is wrong with $it"); null }// TODO: Why does this happen?
+    }
+    topKStrings.forEach { println(it) }
+    System.err.println("Wrote ${linksWithTopKDocs.size} links with accompanying count-search results")
+    println("Average index position of ground target in top K docs sorted by count: " +
+            "${topKStrings.map { it.substringBefore('\t').trim().toDouble() }.sum() / topKStrings.size.toDouble()}")
+}
 
-    println("$LINK_CSV_HEADER\t" + (0..10).joinToString("\t") { "cdoc_$it\tcdoc_context_$it" })
+private fun getLinksWithTopKCandidates(): List<LinkWithCandidates> {
+    println("gt_rank\t$LINK_CSV_HEADER\t" + (0 until TOP_K_DOCS).joinToString("\t") { "top${it}_doc_uri\ttop${it}_doc_title\ttop${it}_doc_context" })
 
-    links!!.forEach { link ->
-        LinkWithCandidates(link, link.linkText.topDocsMatchingQuery().map {
-            Pair(it, it.targetDoc()?.extractConcordances(link.linkText) ?: listOf())
-        }).let { println(it) }
+    return links!!.map { link ->
+        LinkWithCandidates(link, link.linkText.topDocsMatchingQuery().mapNotNull {
+            it.targetDoc()?.let { doc ->
+                Triple(it, doc.title () ?: "", doc.text()?.extractConcordances(link.linkText) ?: listOf())
+            }
+        })
     }
 }
 
