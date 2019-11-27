@@ -68,7 +68,7 @@ class LinkWithCandidates(val link: Link, var countSearchCandidates: List<Triple<
             it.first.compact() + "\t" + it.second + "\t" + it.third.joinToString(" … ").noTabs()
         }.let {
             val occurrences = it.count { char -> char == '…' }
-            if (occurrences <= TOP_K_DOCS) it.padEnd(TOP_K_DOCS - occurrences - 1, '\t') else it
+            if (occurrences <= TOP_K_DOCS) it.padEnd((TOP_K_DOCS - occurrences - 1).coerceAtLeast(0), '\t') else it
         }
 }
 
