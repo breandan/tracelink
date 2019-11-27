@@ -52,7 +52,9 @@ fun String.extractConcordances(query: String? = null): List<String> {
 
     return words.fold(mutableListOf()) { concordances, word ->
         trailingIterator.takeOrEvictFrom(trailingTerms)
-        if (word == query || query.isNullOrBlank())
+        if (word == query)
+            concordances.add(leadingTerms.joinToString(" ") + " <<LTX>> " + trailingTerms.joinToString(" "))
+        else if(query.isNullOrBlank())
             concordances.add(leadingTerms.joinToString(" ") + " $word " + trailingTerms.joinToString(" "))
 
         // Backfill leading words
@@ -76,7 +78,6 @@ var links: List<Link>? = null
 
 fun buildIndex(file: String) {
     links = File(file).readLines().drop(1)
-        .take(500)
         .parallelStream()
         .map { Link(it).apply { linkCounts.incrementAndGet(linkText) } }
         .collect(Collectors.toList())
