@@ -30,8 +30,7 @@ data class Link(
     val targetFragment: String       // Link fragment (indicating subsection)
 ) {
     constructor(
-        line: String, parsed: Array<String> = line.split("\t")
-            .map { it.trim() }.toTypedArray()
+        line: String, parsed: Array<String> = line.split("\t").map { it.trim() }.toTypedArray()
     ) : this(
         linkText = parsed[0].normalize(),
         sourceHitCount = Integer.valueOf(parsed[1]),

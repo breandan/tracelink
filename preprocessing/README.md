@@ -27,7 +27,6 @@ val VALID_PHRASE = "$TEXT_OR_CODE$BALANCED_BRACKETS($TEXT_OR_CODE)*"
 val LINK_REGEX = Regex("<a[^<>]*href=\"([^<>#:?\"]*?)(#[^<>#:?\"]*)?\"[^<>]*>($VALID_PHRASE)</a>")
 
 val asciiRegex = Regex("[ -~]*")
-val previouslySeen = ConcurrentHashMap.newKeySet<Int>()
 ```
 
 All links are validated and point to a known document in the same docset.
