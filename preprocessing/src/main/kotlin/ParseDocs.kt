@@ -59,19 +59,21 @@ private fun indexDocs() {
     val startTime = System.currentTimeMillis()
 
     parseDocs().forEach { docStream: Stream<Doc?>? ->
-        if (System.currentTimeMillis() - startTime > timeLimit) return@forEach
+        if (timeLimitExceeded(startTime)) return@forEach
 
         docStream?.forEach { doc: Doc? ->
-            if (System.currentTimeMillis() - startTime > timeLimit) return@forEach
+            if (timeLimitExceeded(startTime)) return@forEach
             doc?.run {
                 iw.addDoc(this); t += 1;
-                if (t % 1000 == 0) println("Indexed $uri")
+                if (t % 1000 == 0) System.err.println("Indexed $uri")
             }
         }
     }
 
     iw.close()
 }
+
+private fun timeLimitExceeded(startTime: Long) = System.currentTimeMillis() - startTime > timeLimit
 
 private fun jDocToDoc(it: org.jsoup.nodes.Document): Doc {
     val uri = it.baseUri()

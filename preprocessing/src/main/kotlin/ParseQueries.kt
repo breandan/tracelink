@@ -79,7 +79,7 @@ var links: List<Link>? = null
 fun buildIndex(file: String) {
     links = File(file).readLines().drop(1)
         .parallelStream()
-        .map { Link(it).apply { linkCounts.incrementAndGet(linkText) } }
+        .map { Link(it).apply { linkCounts.incrementAndGet(anchorText) } }
         .collect(Collectors.toList())
 
     links!!.map { listOf(it.sourceUri, it.targetUri) }.flatten().distinct()
@@ -138,7 +138,7 @@ fun main(args: Array<String>) {
 }
 
 private fun getLinksWithTopKCandidates(): List<LinkWithCandidates> =
-    links!!.map { link -> LinkWithCandidates(link, getCandidatesForQuery(link.linkText)) }
+    links!!.map { link -> LinkWithCandidates(link, getCandidatesForQuery(link.anchorText)) }
 
 val MIN_FREQ_TO_CACHE_QUERY = 2
 val frequentQueryCache = ConcurrentHashMap<String, List<Triple<String, String, List<String>>>>()
