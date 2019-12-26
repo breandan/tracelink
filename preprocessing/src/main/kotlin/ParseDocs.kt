@@ -40,18 +40,14 @@ fun parseDocs() =
         .map { archive ->
             archive.getHtmlFiles()?.map { file ->
                 file.asHtmlDoc("${file.url}")?.let {
-                    jDocToDoc(it)
+                    convertJsoupDocToDocTrace(it)
                 }
             }
         }
 
 fun main() {
     indexDocs()
-
-    println("Query took: " + measureTimeMillis { query("test") } + " ms")
 }
-
-val timeLimit = 84000000
 
 private fun indexDocs() {
     var t = 0
@@ -73,9 +69,11 @@ private fun indexDocs() {
     iw.close()
 }
 
+val timeLimit = 84000000
+// Needed if running on a time-sharing system to flush the existing contents in a timely manner..
 private fun timeLimitExceeded(startTime: Long) = System.currentTimeMillis() - startTime > timeLimit
 
-private fun jDocToDoc(it: org.jsoup.nodes.Document): Doc {
+private fun convertJsoupDocToDocTrace(it: org.jsoup.nodes.Document): Doc {
     val uri = it.baseUri()
     val title = try {
         it.title()
@@ -90,35 +88,6 @@ private fun jDocToDoc(it: org.jsoup.nodes.Document): Doc {
 private fun org.jsoup.nodes.Document.parseFragment(fragment: String): String? =
     select("[id='$fragment']")?.firstOrNull()?.text()
 
-fun query(querystr: String = "test") {
-    // the "title" arg specifies the default field to use
-    // when no field is explicitly specified in the query.
-    val q = MultiFieldQueryParser(arrayOf("title", "contents", "uri"), analyzer).parse(querystr)
-
-    // search
-    val hitsPerPage = 9
-    val reader = DirectoryReader.open(index)
-    val searcher = IndexSearcher(reader)
-
-    val collector = TopScoreDocCollector.create(hitsPerPage, 10)
-    searcher.search(q, collector)
-    val hits = collector.topDocs().scoreDocs
-
-    // display results
-    println("Found ${hits.size} hits.")
-    hits.forEachIndexed { i, scoreDoc ->
-        val docId = scoreDoc.doc
-        val d = searcher.doc(docId)
-        println((i + 1).toString() + ". " + d.get("title") + "\t" + d.get("uri"))
-    }
-    reader.close()
-}
-
-private fun IndexSearcher.getStats(term: String): TermStatistics? {
-    val cs = collectionStatistics("contents")
-    val tm = Term("contents", term)
-    return termStatistics(tm, TermStates.build(topReaderContext, tm, true))
-}
 
 private fun IndexWriter.addDoc(d: Doc) =
     addDocument(Document().apply {

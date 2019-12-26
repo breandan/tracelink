@@ -126,7 +126,7 @@ fun main(args: Array<String>) {
     val topKStrings = linksWithTopKDocs.mapNotNull {
         val trueIdx = it.countSearchCandidates.indexOfFirst { candidate -> candidate.first == it.link.targetUri }
         if (0 <= trueIdx) trueIdx.toString().padEnd(4) + "\t" + it
-        else { System.err.println("Something is wrong with $it"); null }// TODO: Why does this happen?
+        else { System.err.println("Something is wrong with $it"); null } // TODO: Why does this happen?
     }
     topKStrings.forEach { println(it) }
     System.err.println("Wrote ${linksWithTopKDocs.size} links with accompanying count-search results")

@@ -26,7 +26,7 @@ dependencies {
 }
 
 tasks {
-    listOf("ParseDocs", "ParseLinks", "ParseQueries")
+    listOf("ParseDocs", "ParseLinks", "ParseQueries", "QueryDocs")
         .forEach {
             register(it, JavaExec::class) {
                 findProperty("retty")?.let { args = listOf("1") }

@@ -7,10 +7,6 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.stream.Stream
 
 /**
- * Intended to be called from the command line, e.g. `./gradlew run > file.csv`
- */
-
-/**
  * Class representing an HTML link which the document's author saw fit to reference
  * another page in the same doc set. The following features are the minimal set of
  * features which are needed to perform link prediction.
@@ -28,16 +24,14 @@ data class Link(
     val targetUri: String,           // Target document location
     val targetFragment: String       // Link fragment (indicating subsection)
 ) {
-    constructor(
-        line: String, parsed: Array<String> = line.split("\t").map { it.trim() }.toTypedArray()
-    ) : this(
+    constructor(line: String, parsed: Array<String> = line.split("\t").map { it.trim() }.toTypedArray()) : this(
         anchorText = parsed[0].normalize(),
         sourceHitCount = Integer.valueOf(parsed[1]),
         targetHitCount = Integer.valueOf(parsed[2]),
         sourceTitle = parsed[3].trim(),
         targetTitle = parsed[4].trim(),
         sourceContext = parsed[5].split(Regex(" <<[A-Z]+>> ")),
-        targetContext =parsed[6].split(" … ").map { it.trim() },
+        targetContext = parsed[6].split(" … ").map { it.trim() },
         sourceUri = parsed[7].toFullPath(),
         targetUri = parsed[8].toFullPath(),
         targetFragment = parsed[9]
@@ -121,10 +115,6 @@ val archivesDir: String = "archives" // Parent directory (assumed to contain `.t
 val archivesAbs: String = "tgz:file://" + File(archivesDir).absolutePath
 fun String.archiveName() = substringAfter(archivesAbs).drop(1).substringBefore("/")
 
-/**
- * Extracts documents from archives in parallel and prints the links in CSV format.
- */
-
 val LINK_CSV_HEADER = "link_text\t" +
         "source_hit_count\t" +
         "target_hit_count\t" +
@@ -136,6 +126,10 @@ val LINK_CSV_HEADER = "link_text\t" +
         "target_document\t" +
         "link_fragment"
 
+/**
+ * Extracts documents from archives in parallel and prints the links in CSV format.
+ */
+
 fun printLinks() {
     println(LINK_CSV_HEADER)
 
@@ -146,12 +140,9 @@ fun printLinks() {
                 fetchLinks(archive)?.forEach { htmlLinkStream: Stream<Link?>? ->
                     try {
                         htmlLinkStream?.forEach { link: Link? ->
-                            if (link != null) {
-                                    println(link)
-                            }
+                            if (link != null) println(link)
                         }
                     } catch (e: Exception) {
-//                                System.err.println("Error reading stream $e")
                         e.printStackTrace()
                     }
                 }
