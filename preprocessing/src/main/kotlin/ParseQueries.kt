@@ -30,12 +30,13 @@ fun <T> Iterator<T>.takeOrEvictFrom(queue: EvictingQueue<T>) {
     if (hasNext()) queue.add(next()) else if (queue.isNotEmpty()) queue.remove()
 }
 
-/* Generates a concordance list for every word in a string, with the keyword located in the dead center of the list. For
+/* Generates a concordance list for every word in a string, with the keyword located in the dead center of the list, or
+ * surrounded by up to WORDS_CTX_LEN contiguous words on either side and truncated at the boundaries of the string. For
  * example, when invoked on "the quick brown fox jumped over the lazy dog", this method will produce the following list:
  *
- * {"the quick brown fox", "the quick brown fox jumped", "the quick brown fox jumped over", "the quick brown fox jumped
- * over the", "quick brown fox jumped over the lazy", "brown fox jumped over the lazy dog", "fox jumped over the lazy
- * dog", "jumped over the lazy dog", "over the lazy dog"}.
+ * {"<the> quick brown fox", "the <quick> brown fox jumped", "the quick <brown> fox jumped over", "the quick brown <fox>
+ * jumped over the", "quick brown fox <jumped> over the lazy", "brown fox jumped <over> the lazy dog", "fox jumped over
+ * <the> lazy dog", "jumped over the <lazy> dog", "over the lazy <dog>"}
  *
  * For more information about concordance/KWIC, refer to: https://en.wikipedia.org/wiki/Key_Word_in_Context
  */
@@ -64,14 +65,17 @@ fun String.extractConcordances(query: String? = null): List<String> {
     }
 }
 
-class LinkWithCandidates(val link: Link, var countSearchCandidates: List<Triple<String, String, List<String>>>) {
-    override fun toString() =
-        link.toString() + "\t" + countSearchCandidates.joinToString("\t") {
-            it.first.compact() + "\t" + it.second + "\t" + it.third.joinToString(" … ").noTabs()
-        }.let {
-            val occurrences = it.count { char -> char == '…' }
-            if (occurrences <= TOP_K_DOCS) it.padEnd((TOP_K_DOCS - occurrences - 1).coerceAtLeast(0), '\t') else it
-        }
+class CandidateDoc(val uri: String, val title: String, val context: List<String>)
+
+class LinkWithCountSearchCandidates(val link: Link, var countSearchCandidates: List<CandidateDoc>) {
+    fun contexts() = countSearchCandidates.joinToString("\t") {
+        it.uri.compact() + "\t" + it.title + "\t" + it.context.joinToString(" … ").noTabs()
+    }.let {
+        val columns = it.count { char -> char == '\t' }
+        if (columns <= TOP_K_DOCS*3) it + "".padEnd((TOP_K_DOCS*3 - columns - 1).coerceAtLeast(0), '\t') else it
+    }
+
+    override fun toString() = link.toString() + "\t" + contexts()
 }
 
 var links: List<Link>? = null
@@ -111,7 +115,8 @@ fun buildIndex(file: String) {
 }
 
 val TOP_K_DOCS = 20
-fun String.topURIsMatchingQuery() = invertedIndex[this].sortedBy { -phraseCounts["$this@$it"] }.take(TOP_K_DOCS)
+fun String.getTopCandidatesMatchingQuery(): List<String> =
+    invertedIndex[this].sortedBy { -phraseCounts["$this@$it"] }.take(TOP_K_DOCS)
 
 fun main(args: Array<String>) {
     val linksFile = args[0]
@@ -119,39 +124,39 @@ fun main(args: Array<String>) {
     System.err.println("Read ${links?.size} links from $linksFile")
     serializeIndex(File("${linksFile.substringBeforeLast(".")}_index_${System.currentTimeMillis()}.idx"))
     serializePhraseCounts(File("${linksFile.substringBeforeLast(".")}_phrases_${System.currentTimeMillis()}.idx"))
-    println("gt_rank\t$LINK_CSV_HEADER\t" + (0 until TOP_K_DOCS).joinToString("\t") {
+    println("link_text\tsource_idx\ttarget_idx\t" + (0 until TOP_K_DOCS).joinToString("\t") {
         "top${it}_doc_uri\ttop${it}_doc_title\ttop${it}_doc_context" }
     )
+
     val linksWithTopKDocs = getLinksWithTopKCandidates()
-    val topKStrings = linksWithTopKDocs.mapNotNull {
-        val trueIdx = it.countSearchCandidates.indexOfFirst { candidate -> candidate.first == it.link.targetUri }
-        if (0 <= trueIdx) trueIdx.toString().padEnd(4) + "\t" + it
-        else { System.err.println("Something is wrong with $it"); null } // TODO: Why does this happen?
+
+    linksWithTopKDocs.forEach { it: LinkWithCountSearchCandidates ->
+        val sourceIdx = it.countSearchCandidates.indexOfFirst { candidate -> candidate.uri == it.link.sourceUri }
+        val targetIdx = it.countSearchCandidates.indexOfFirst { candidate -> candidate.uri == it.link.targetUri }
+        val srcIdx = (sourceIdx.toString() + "/" + it.countSearchCandidates.size.toString()).padEnd(7)
+        val tgtIdx = (targetIdx.toString() + "/" + it.countSearchCandidates.size.toString()).padEnd(7)
+        if (0 <= targetIdx && 0 <= sourceIdx && sourceIdx != targetIdx)
+            println(it.link.anchorText.padEnd(45) + "\t" + srcIdx + "\t" + tgtIdx + "\t" + it.contexts())
     }
-    topKStrings.forEach { println(it) }
-    System.err.println("Wrote ${linksWithTopKDocs.size} links with accompanying count-search results")
-    println(
-        "Average index position of ground target in top K docs sorted by count: " +
-                "${topKStrings.map { it.substringBefore('\t').trim().toDouble() }.sum() / topKStrings.size.toDouble()}"
-    )
+
     System.err.println("Cached ${frequentQueryCache.size} queries with over $MIN_FREQ_TO_CACHE_QUERY links in dataset")
 }
 
-private fun getLinksWithTopKCandidates(): List<LinkWithCandidates> =
-    links!!.map { link -> LinkWithCandidates(link, getCandidatesForQuery(link.anchorText)) }
+private fun getLinksWithTopKCandidates(): List<LinkWithCountSearchCandidates> =
+    links!!.map { link -> LinkWithCountSearchCandidates(link, getCandidatesForQuery(link.anchorText)) }
 
 val MIN_FREQ_TO_CACHE_QUERY = 2
-val frequentQueryCache = ConcurrentHashMap<String, List<Triple<String, String, List<String>>>>()
+val frequentQueryCache = ConcurrentHashMap<String, List<CandidateDoc>>()
 
-private fun getCandidatesForQuery(query: String) =
+private fun getCandidatesForQuery(query: String): List<CandidateDoc> =
     if (linkCounts[query] < MIN_FREQ_TO_CACHE_QUERY) computeCandidates(query)
     else frequentQueryCache.computeIfAbsent(query) { computeCandidates(query) }
 
-private fun computeCandidates(query: String) =
-    query.topURIsMatchingQuery().mapNotNull { it.searchForText(query) }
+private fun computeCandidates(query: String): List<CandidateDoc> =
+    query.getTopCandidatesMatchingQuery().mapNotNull { it.searchForText(query) }
 
-private fun String.searchForText(linkText: String): Triple<String, String, List<String>>? =
-    targetDoc()?.let { Triple(this, it.title() ?: "", it.text()?.extractConcordances(linkText) ?: listOf()) }
+private fun String.searchForText(linkText: String): CandidateDoc? =
+    targetDoc()?.let { CandidateDoc(this, it.title() ?: "", it.text()?.extractConcordances(linkText) ?: listOf()) }
 
 fun serializeIndex(file: File) {
     try {

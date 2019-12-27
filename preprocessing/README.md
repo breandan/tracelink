@@ -2,7 +2,7 @@
 
 ## Prequisites
 
-To run the preprocessor, JDK 1.8+ and Python 3+ are required.
+To run the preprocessor, JDK 1.8+ and Python 2+ are required. When running on Compute Canada, remember to call `module load java` first.
 
 ## Preparation
 
