@@ -155,7 +155,7 @@ private fun getCandidatesForQuery(query: String): List<CandidateDoc> =
 private fun computeCandidates(query: String): List<CandidateDoc> =
     query.getTopCandidatesMatchingQuery().mapNotNull { it.searchForText(query) }
 
-private fun String.searchForText(linkText: String): CandidateDoc? =
+fun String.searchForText(linkText: String): CandidateDoc? =
     targetDoc()?.let { CandidateDoc(this, it.title() ?: "", it.text()?.extractConcordances(linkText) ?: listOf()) }
 
 fun serializeIndex(file: File) {
