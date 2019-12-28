@@ -31,7 +31,7 @@ val invertedIndex = Multimaps.synchronizedMultimap(HashMultimap.create<String, S
 val phraseCounts = AtomicLongMap.create<String>()
 val anchorCounts = AtomicLongMap.create<String>()
 
-fun String.archive() = substringAfter(archivesAbs).substringBefore("/")
+fun String.archive() = substringAfter(archivesAbs).drop(1).substringBefore("/")
 
 fun String.fetchTargetDoc(): Document? =
     try {
@@ -108,7 +108,7 @@ fun buildIndex(file: String) {
         .parallelStream().forEach { uri ->
 //            entry.value.forEachIndexed { idx, uri ->
 //                if (idx % 20 == 0)
-//                    println("Parsed $idx links of ${entry.value.size} in archive ${entry.key.archive()}")
+//                    println("Parsed $idx links of ${entry.value.size} in archive ${entry.key.archiveName()}")
                 val docText = uri.fetchTargetDoc()?.text() ?: ""
                 Regex("\\s$VALID_PHRASE\\s").findAll(docText).forEach { phrase ->
                     val wholePhrase = phrase.value.drop(1).dropLast(1)
@@ -124,11 +124,11 @@ fun buildIndex(file: String) {
             }
 //        }
 
-//    println("Inverted index contains: ${invertedIndex.size()} elements")
+    println("Inverted index contains: ${invertedIndex.size()} elements")
 //    println("Top words index contains:")
 //    val entries: MutableSet<MutableMap.MutableEntry<String, MutableCollection<String>>> = invertedIndex.asMap().entries
 //    entries.sortedBy { -it.value.size }.take(50).forEach { println(it.key.padEnd(20, ' ') + " : " + it.value.size) }
-//    println("Phrase-document count contains: ${phraseCounts.size()} elements")
+    println("Phrase-document count contains: ${phraseCounts.size()} elements")
 }
 
 val TOP_K_DOCS = 20
@@ -136,8 +136,12 @@ fun String.getTopURIsMatchingQuery(): List<String> =
     invertedIndex[this].sortedBy { -phraseCounts["$this@$it"] }.take(TOP_K_DOCS)
 
 private fun storeIndex(linksFile: String) {
-    serializeIndex(File("${linksFile.substringBeforeLast(".")}_index_${System.currentTimeMillis()}.idx"))
-    serializePhraseCounts(File("${linksFile.substringBeforeLast(".")}_phrases_${System.currentTimeMillis()}.idx"))
+    val indexFileName = "${linksFile.substringBeforeLast(".")}_index_${System.currentTimeMillis()}.idx"
+    serializeIndex(File(indexFileName))
+    println("Saved index to $indexFileName")
+    val phraseFileName = "${linksFile.substringBeforeLast(".")}_phrases_${System.currentTimeMillis()}.idx"
+    serializePhraseCounts(File(phraseFileName))
+    println("Saved phrases to $phraseFileName")
 }
 
 private fun printLinksWithCandidates() =
