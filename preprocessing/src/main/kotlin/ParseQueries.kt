@@ -11,15 +11,32 @@ import java.io.ObjectOutputStream
 import java.util.concurrent.ConcurrentHashMap
 import java.util.stream.Collectors
 
+fun main(args: Array<String>) {
+    val linksFile = args[0]
+    buildIndex(linksFile)
+    System.err.println("Read ${links?.size} links from $linksFile")
+
+    storeIndex(linksFile)
+
+    println("link_text\tsource_idx\ttarget_idx\t" + (0 until TOP_K_DOCS).joinToString("\t") {
+        "top${it}_doc_uri\ttop${it}_doc_title\ttop${it}_doc_context" }
+    )
+
+    printLinksWithCandidates()
+
+    System.err.println("Cached ${frequentQueryCache.size} queries with over $MIN_FREQ_TO_CACHE_QUERY links in dataset")
+}
+
+// Contains a list of words and the URIs of documents in which they can be found.
 val invertedIndex = Multimaps.synchronizedMultimap(HashMultimap.create<String, String>())
 val phraseCounts = AtomicLongMap.create<String>()
 val linkCounts = AtomicLongMap.create<String>()
 
 fun String.archive() = substringAfter(archivesAbs).drop(1).substringBefore("/")
 
-fun String.targetDoc(): Document? =
+fun String.fetchTargetDoc(): Document? =
     try {
-        VFS.getManager().resolveFile(this)?.asHtmlDoc() ?: null
+        VFS.getManager().resolveFile(this)?.asHtmlDoc()
     } catch (ex: Exception) {
         null
     }
@@ -89,19 +106,19 @@ fun buildIndex(file: String) {
     links!!.map { listOf(it.sourceUri, it.targetUri) }.flatten().distinct()
         .parallelStream().collect(Collectors.groupingByConcurrent<String, String> { it.archive() }).entries
         .parallelStream().forEach { entry ->
-            entry.value.forEachIndexed { idx, document ->
+            entry.value.forEachIndexed { idx, uri ->
                 if (idx % 20 == 0)
                     System.err.println("Parsed $idx links of ${entry.value.size} in archive ${entry.key.archiveName()}")
-                val docText = document.targetDoc()?.text() ?: ""
+                val docText = uri.fetchTargetDoc()?.text() ?: ""
                 Regex("\\s$VALID_PHRASE\\s").findAll(docText).forEach { phrase ->
                     val wholePhrase = phrase.value.drop(1).dropLast(1)
                     wholePhrase.split(Regex("[^A-Za-z]")).forEach { phraseFragment ->
-                        if (MIN_ALPHANUMERICS < phraseFragment.length) invertedIndex.put(phraseFragment, document);
-                        phraseCounts.incrementAndGet("$phraseFragment@$document")
+                        if (MIN_ALPHANUMERICS < phraseFragment.length) invertedIndex.put(phraseFragment, uri);
+                        phraseCounts.incrementAndGet("$phraseFragment@$uri")
                     }
                     if (linkCounts.containsKey(wholePhrase)) {
-                        invertedIndex.put(wholePhrase, document)
-                        phraseCounts.incrementAndGet("$wholePhrase@$document")
+                        invertedIndex.put(wholePhrase, uri)
+                        phraseCounts.incrementAndGet("$wholePhrase@$uri")
                     }
                 }
             }
@@ -115,22 +132,16 @@ fun buildIndex(file: String) {
 }
 
 val TOP_K_DOCS = 20
-fun String.getTopCandidatesMatchingQuery(): List<String> =
+fun String.getTopURIsMatchingQuery(): List<String> =
     invertedIndex[this].sortedBy { -phraseCounts["$this@$it"] }.take(TOP_K_DOCS)
 
-fun main(args: Array<String>) {
-    val linksFile = args[0]
-    buildIndex(linksFile)
-    System.err.println("Read ${links?.size} links from $linksFile")
+private fun storeIndex(linksFile: String) {
     serializeIndex(File("${linksFile.substringBeforeLast(".")}_index_${System.currentTimeMillis()}.idx"))
     serializePhraseCounts(File("${linksFile.substringBeforeLast(".")}_phrases_${System.currentTimeMillis()}.idx"))
-    println("link_text\tsource_idx\ttarget_idx\t" + (0 until TOP_K_DOCS).joinToString("\t") {
-        "top${it}_doc_uri\ttop${it}_doc_title\ttop${it}_doc_context" }
-    )
+}
 
-    val linksWithTopKDocs = getLinksWithTopKCandidates()
-
-    linksWithTopKDocs.forEach { it: LinkWithCountSearchCandidates ->
+private fun printLinksWithCandidates() =
+    getLinksWithCandidates().forEach { it: LinkWithCountSearchCandidates ->
         val sourceIdx = it.countSearchCandidates.indexOfFirst { candidate -> candidate.uri == it.link.sourceUri }
         val targetIdx = it.countSearchCandidates.indexOfFirst { candidate -> candidate.uri == it.link.targetUri }
         val srcIdx = (sourceIdx.toString() + "/" + it.countSearchCandidates.size.toString()).padEnd(7)
@@ -139,10 +150,7 @@ fun main(args: Array<String>) {
             println(it.link.anchorText.padEnd(45) + "\t" + srcIdx + "\t" + tgtIdx + "\t" + it.contexts())
     }
 
-    System.err.println("Cached ${frequentQueryCache.size} queries with over $MIN_FREQ_TO_CACHE_QUERY links in dataset")
-}
-
-private fun getLinksWithTopKCandidates(): List<LinkWithCountSearchCandidates> =
+private fun getLinksWithCandidates(): List<LinkWithCountSearchCandidates> =
     links!!.map { link -> LinkWithCountSearchCandidates(link, getCandidatesForQuery(link.anchorText)) }
 
 val MIN_FREQ_TO_CACHE_QUERY = 2
@@ -153,10 +161,10 @@ private fun getCandidatesForQuery(query: String): List<CandidateDoc> =
     else frequentQueryCache.computeIfAbsent(query) { computeCandidates(query) }
 
 private fun computeCandidates(query: String): List<CandidateDoc> =
-    query.getTopCandidatesMatchingQuery().mapNotNull { it.searchForText(query) }
+    query.getTopURIsMatchingQuery().mapNotNull { it.searchForText(query) }
 
 fun String.searchForText(linkText: String): CandidateDoc? =
-    targetDoc()?.let { CandidateDoc(this, it.title() ?: "", it.text()?.extractConcordances(linkText) ?: listOf()) }
+    fetchTargetDoc()?.let { CandidateDoc(this, it.title() ?: "", it.text()?.extractConcordances(linkText) ?: listOf()) }
 
 fun serializeIndex(file: File) {
     try {
