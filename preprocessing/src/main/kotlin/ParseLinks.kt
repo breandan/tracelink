@@ -111,7 +111,7 @@ fun String.toFullPath() = "$archivesAbs${this.substringBeforeLast("%")}"
 
 fun String.noTabs() = replace("\t", "  ").replace("\"", "'")
 
-val archivesDir: String = "archives" // Parent directory (assumed to contain `.tgz` files)
+val archivesDir: String = "python" // Parent directory (assumed to contain `.tgz` files)
 val archivesAbs: String = "tgz:file://" + File(archivesDir).absolutePath
 fun String.archiveName() = substringAfter(archivesAbs).drop(1).substringBefore("/")
 

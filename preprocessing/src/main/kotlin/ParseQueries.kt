@@ -95,7 +95,7 @@ class LinkWithCountSearchCandidates(val link: Link, var countSearchCandidates: L
     override fun toString() = link.toString() + "\t" + contexts()
 }
 
-var links: List<Link>? = null
+lateinit var links: List<Link>
 
 fun buildIndex(file: String) {
     links = File(file).readLines().drop(1)
@@ -103,7 +103,9 @@ fun buildIndex(file: String) {
         .map { Link(it).apply { linkCounts.incrementAndGet(anchorText) } }
         .collect(Collectors.toList())
 
-    links!!.map { listOf(it.sourceUri, it.targetUri) }.flatten().distinct()
+    System.err.println("Read ${links.size} links from $file")
+
+    links.map { listOf(it.sourceUri, it.targetUri) }.flatten().distinct()
         .parallelStream().collect(Collectors.groupingByConcurrent<String, String> { it.archive() }).entries
         .parallelStream().forEach { entry ->
             entry.value.forEachIndexed { idx, uri ->
