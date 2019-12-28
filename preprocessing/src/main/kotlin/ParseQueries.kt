@@ -31,7 +31,7 @@ val invertedIndex = Multimaps.synchronizedMultimap(HashMultimap.create<String, S
 val phraseCounts = AtomicLongMap.create<String>()
 val anchorCounts = AtomicLongMap.create<String>()
 
-fun String.archive() = substringAfter(archivesAbs).drop(1).substringBefore("/")
+fun String.archive() = substringAfter(archivesAbs).substringBefore("/")
 
 fun String.fetchTargetDoc(): Document? =
     try {
@@ -103,11 +103,12 @@ fun buildIndex(file: String) {
     println("Read ${links.size} links from $file")
 
     links.map { listOf(it.sourceUri, it.targetUri) }.flatten().distinct()
-        .parallelStream().collect(Collectors.groupingByConcurrent<String, String> { it.archive() }).entries
-        .parallelStream().forEach { entry ->
-            entry.value.forEachIndexed { idx, uri ->
-                if (idx % 20 == 0)
-                    println("Parsed $idx links of ${entry.value.size} in archive ${entry.key.archiveName()}")
+        // Ensure we group by the archive filename so that threads do not deadlock on file IO
+//        .parallelStream().collect(Collectors.groupingByConcurrent<String, String> { it.archive() }).entries
+        .parallelStream().forEach { uri ->
+//            entry.value.forEachIndexed { idx, uri ->
+//                if (idx % 20 == 0)
+//                    println("Parsed $idx links of ${entry.value.size} in archive ${entry.key.archive()}")
                 val docText = uri.fetchTargetDoc()?.text() ?: ""
                 Regex("\\s$VALID_PHRASE\\s").findAll(docText).forEach { phrase ->
                     val wholePhrase = phrase.value.drop(1).dropLast(1)
@@ -121,7 +122,7 @@ fun buildIndex(file: String) {
                     }
                 }
             }
-        }
+//        }
 
 //    println("Inverted index contains: ${invertedIndex.size()} elements")
 //    println("Top words index contains:")
