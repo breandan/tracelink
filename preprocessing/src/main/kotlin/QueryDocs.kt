@@ -33,7 +33,7 @@ private fun runQuery(query: String, take: Int = 20) =
 
 fun getLatest(indexFileKeyword: String) =
     File(".").listFiles().sortedBy { it.name }
-        .filter { it.name.contains(indexFileKeyword) }
+        .filter { indexFileKeyword in it.name }
         .last { it.extension == "idx" }
 
 inline fun <reified T> deserializeIndex(file: File, t: (T) -> Unit) {

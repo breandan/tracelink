@@ -113,7 +113,7 @@ fun String.noTabs() = replace("\t", "  ").replace("\"", "'")
 
 val archivesDir: String = "python" // Parent directory (assumed to contain `.tgz` files)
 val archivesAbs: String = "tgz:file://" + File(archivesDir).absolutePath
-fun String.archiveName() = substringAfter(archivesAbs).drop(1).substringBefore("/")
+fun String.archiveName() = substringAfter(archivesAbs).substringBefore("/")
 
 val LINK_CSV_HEADER = "link_text\t" +
         "source_hit_count\t" +
@@ -234,7 +234,7 @@ fun parseOrGetCachedDocTrace(anchorText: String, relativeTo: FileObject, targetU
     val resolvedFile = relativeTo.parent.resolveFile(targetUri.substringBeforeLast("#"))
     return docTraceCache.computeIfAbsent(Pair(anchorText, resolvedFile.url.path)) {
         val targetDoc = resolvedFile.asHtmlDoc(resolvedFile.url.path)
-        val targetFragment = if (targetUri.contains("#")) targetUri.substringAfterLast("#") else ""
+        val targetFragment = if ("#" in targetUri) targetUri.substringAfterLast("#") else ""
         val targetDocHits = targetDoc?.search(anchorText, targetFragment)?.toList() ?: emptyList()
         val targetTitle = targetDoc?.title() ?: ""
         DocTrace(targetTitle, resolvedFile.toString(), targetFragment, targetDocHits)

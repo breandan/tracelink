@@ -14,7 +14,6 @@ import java.util.stream.Collectors
 fun main(args: Array<String>) {
     val linksFile = args[0]
     buildIndex(linksFile)
-    System.err.println("Read ${links?.size} links from $linksFile")
 
     storeIndex(linksFile)
 
@@ -30,7 +29,7 @@ fun main(args: Array<String>) {
 // Contains a list of words and the URIs of documents in which they can be found.
 val invertedIndex = Multimaps.synchronizedMultimap(HashMultimap.create<String, String>())
 val phraseCounts = AtomicLongMap.create<String>()
-val linkCounts = AtomicLongMap.create<String>()
+val anchorCounts = AtomicLongMap.create<String>()
 
 fun String.archive() = substringAfter(archivesAbs).drop(1).substringBefore("/")
 
@@ -99,18 +98,16 @@ lateinit var links: List<Link>
 
 fun buildIndex(file: String) {
     links = File(file).readLines().drop(1)
-        .parallelStream()
-        .map { Link(it).apply { linkCounts.incrementAndGet(anchorText) } }
-        .collect(Collectors.toList())
+        .map { Link(it).apply { anchorCounts.incrementAndGet(anchorText) } }
 
-    System.err.println("Read ${links.size} links from $file")
+    println("Read ${links.size} links from $file")
 
     links.map { listOf(it.sourceUri, it.targetUri) }.flatten().distinct()
         .parallelStream().collect(Collectors.groupingByConcurrent<String, String> { it.archive() }).entries
         .parallelStream().forEach { entry ->
             entry.value.forEachIndexed { idx, uri ->
                 if (idx % 20 == 0)
-                    System.err.println("Parsed $idx links of ${entry.value.size} in archive ${entry.key.archiveName()}")
+                    println("Parsed $idx links of ${entry.value.size} in archive ${entry.key.archiveName()}")
                 val docText = uri.fetchTargetDoc()?.text() ?: ""
                 Regex("\\s$VALID_PHRASE\\s").findAll(docText).forEach { phrase ->
                     val wholePhrase = phrase.value.drop(1).dropLast(1)
@@ -118,7 +115,7 @@ fun buildIndex(file: String) {
                         if (MIN_ALPHANUMERICS < phraseFragment.length) invertedIndex.put(phraseFragment, uri);
                         phraseCounts.incrementAndGet("$phraseFragment@$uri")
                     }
-                    if (linkCounts.containsKey(wholePhrase)) {
+                    if (anchorCounts.containsKey(wholePhrase)) {
                         invertedIndex.put(wholePhrase, uri)
                         phraseCounts.incrementAndGet("$wholePhrase@$uri")
                     }
@@ -159,7 +156,7 @@ val MIN_FREQ_TO_CACHE_QUERY = 2
 val frequentQueryCache = ConcurrentHashMap<String, List<CandidateDoc>>()
 
 private fun getCandidatesForQuery(query: String): List<CandidateDoc> =
-    if (linkCounts[query] < MIN_FREQ_TO_CACHE_QUERY) computeCandidates(query)
+    if (anchorCounts[query] < MIN_FREQ_TO_CACHE_QUERY) computeCandidates(query)
     else frequentQueryCache.computeIfAbsent(query) { computeCandidates(query) }
 
 private fun computeCandidates(query: String): List<CandidateDoc> =
