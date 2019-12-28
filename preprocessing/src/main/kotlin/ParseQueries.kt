@@ -9,7 +9,6 @@ import java.io.File
 import java.io.IOException
 import java.io.ObjectOutputStream
 import java.util.concurrent.ConcurrentHashMap
-import java.util.stream.Collectors
 
 fun main(args: Array<String>) {
     val linksFile = args[0]
@@ -109,19 +108,8 @@ fun buildIndex(file: String) {
 //            entry.value.forEachIndexed { idx, uri ->
 //                if (idx % 20 == 0)
 //                    println("Parsed $idx links of ${entry.value.size} in archive ${entry.key.archiveName()}")
-                val docText = uri.fetchTargetDoc()?.text() ?: ""
-                Regex("\\s$VALID_PHRASE\\s").findAll(docText).forEach { phrase ->
-                    val wholePhrase = phrase.value.drop(1).dropLast(1)
-                    wholePhrase.split(Regex("[^A-Za-z]")).forEach { phraseFragment ->
-                        if (MIN_ALPHANUMERICS < phraseFragment.length) invertedIndex.put(phraseFragment, uri);
-                        phraseCounts.incrementAndGet("$phraseFragment@$uri")
-                    }
-                    if (anchorCounts.containsKey(wholePhrase)) {
-                        invertedIndex.put(wholePhrase, uri)
-                        phraseCounts.incrementAndGet("$wholePhrase@$uri")
-                    }
-                }
-            }
+            indexUri(uri)
+        }
 //        }
 
     println("Inverted index contains: ${invertedIndex.size()} elements")
@@ -129,6 +117,21 @@ fun buildIndex(file: String) {
 //    val entries: MutableSet<MutableMap.MutableEntry<String, MutableCollection<String>>> = invertedIndex.asMap().entries
 //    entries.sortedBy { -it.value.size }.take(50).forEach { println(it.key.padEnd(20, ' ') + " : " + it.value.size) }
     println("Phrase-document count contains: ${phraseCounts.size()} elements")
+}
+
+private fun indexUri(uri: String) {
+    val docText = uri.fetchTargetDoc()?.text() ?: ""
+    Regex("\\s$VALID_PHRASE\\s").findAll(docText).forEach { phrase ->
+        val wholePhrase = phrase.value.drop(1).dropLast(1)
+        wholePhrase.split(Regex("[^A-Za-z]")).forEach { phraseFragment ->
+            if (MIN_ALPHANUMERICS < phraseFragment.length) invertedIndex.put(phraseFragment, uri);
+            phraseCounts.incrementAndGet("$phraseFragment@$uri")
+        }
+        if (anchorCounts.containsKey(wholePhrase)) {
+            invertedIndex.put(wholePhrase, uri)
+            phraseCounts.incrementAndGet("$wholePhrase@$uri")
+        }
+    }
 }
 
 val TOP_K_DOCS = 20
@@ -155,7 +158,7 @@ private fun printLinksWithCandidates() =
     }
 
 private fun getLinksWithCandidates(): List<LinkWithCountSearchCandidates> =
-    links!!.map { link -> LinkWithCountSearchCandidates(link, getCandidatesForQuery(link.anchorText)) }
+    links.map { link -> LinkWithCountSearchCandidates(link, getCandidatesForQuery(link.anchorText)) }
 
 val MIN_FREQ_TO_CACHE_QUERY = 2
 val frequentQueryCache = ConcurrentHashMap<String, List<CandidateDoc>>()
