@@ -2,7 +2,7 @@
 
 ## Prequisites
 
-To run the preprocessor, JDK 1.8+ and Python 3+ are required.
+To run the preprocessor, JDK 1.8+ and Python 2+ are required. When running on Compute Canada, remember to call `module load java` first.
 
 ## Preparation
 
@@ -27,7 +27,6 @@ val VALID_PHRASE = "$TEXT_OR_CODE$BALANCED_BRACKETS($TEXT_OR_CODE)*"
 val LINK_REGEX = Regex("<a[^<>]*href=\"([^<>#:?\"]*?)(#[^<>#:?\"]*)?\"[^<>]*>($VALID_PHRASE)</a>")
 
 val asciiRegex = Regex("[ -~]*")
-val previouslySeen = ConcurrentHashMap.newKeySet<Int>()
 ```
 
 All links are validated and point to a known document in the same docset.

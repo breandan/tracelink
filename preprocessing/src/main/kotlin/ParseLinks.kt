@@ -1,5 +1,4 @@
-
-import org.apache.commons.vfs2.AllFileSelector
+import org.apache.commons.vfs2.FileExtensionSelector
 import org.apache.commons.vfs2.FileObject
 import org.apache.commons.vfs2.VFS
 import org.jsoup.nodes.Document
@@ -8,17 +7,13 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.stream.Stream
 
 /**
- * Intended to be called from the command line, e.g. `./gradlew run > file.csv`
- */
-
-/**
  * Class representing an HTML link which the document's author saw fit to reference
  * another page in the same doc set. The following features are the minimal set of
  * features which are needed to perform link prediction.
  */
 
 data class Link(
-    val linkText: String,            // Anchor text of link itself
+    val anchorText: String,          // Anchor text of link itself
     val sourceHitCount: Int,         // Number of occurrences of the link text in the source document
     val targetHitCount: Int,         // Number of occurrences of the link text in the target document
     val sourceTitle: String,         // Title of the source document
@@ -29,17 +24,14 @@ data class Link(
     val targetUri: String,           // Target document location
     val targetFragment: String       // Link fragment (indicating subsection)
 ) {
-    constructor(
-        line: String, parsed: Array<String> = line.split("\t")
-            .map { it.trim() }.toTypedArray()
-    ) : this(
-        linkText = parsed[0].normalize(),
+    constructor(line: String, parsed: Array<String> = line.split("\t").map { it.trim() }.toTypedArray()) : this(
+        anchorText = parsed[0].normalize(),
         sourceHitCount = Integer.valueOf(parsed[1]),
         targetHitCount = Integer.valueOf(parsed[2]),
         sourceTitle = parsed[3].trim(),
         targetTitle = parsed[4].trim(),
         sourceContext = parsed[5].split(Regex(" <<[A-Z]+>> ")),
-        targetContext =parsed[6].split(" … ").map { it.trim() },
+        targetContext = parsed[6].split(" … ").map { it.trim() },
         sourceUri = parsed[7].toFullPath(),
         targetUri = parsed[8].toFullPath(),
         targetFragment = parsed[9]
@@ -47,9 +39,9 @@ data class Link(
 
     val targetArchive: String = targetUri.archiveName()
 
-    fun pretty(): String = linkText.noTabs().prettyText() + "\t" +
+    fun pretty(): String = anchorText.noTabs().prettyText() + "\t" +
             sourceHitCount.toString().padStart(2, ' ') + "\t" +
-            targetHitCount.toString().padStart(4, ' ').padEnd(6, ' ') + "\t" +
+            targetHitCount.toString().padStart(4, ' ').padEnd(8, ' ') + "\t" +
             sourceTitle.noTabs().prettyTitle() + "\t" +
             targetTitle.noTabs().prettyTitle() + "\t" +
             sourceContext.joinToString(" … ") { prettyHit(it.replace("…", "...")) }.padEnd(2000, ' ') + "\t" +
@@ -60,7 +52,7 @@ data class Link(
 
     override fun toString(): String =
         if (PRETTY_PRINT) { pretty() } else {
-            linkText.noTabs() + "\t" +
+            anchorText.noTabs() + "\t" +
                     sourceHitCount.toString() + "\t" +
                     targetHitCount.toString() + "\t" +
                     sourceTitle.noTabs() + "\t" +
@@ -72,7 +64,7 @@ data class Link(
                     targetFragment
         }
 
-    override fun hashCode() = (linkText + sourceUri).hashCode()
+    override fun hashCode() = (anchorText + sourceUri).hashCode()
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -80,7 +72,7 @@ data class Link(
 
         other as Link
 
-        if (linkText != other.linkText) return false
+        if (anchorText != other.anchorText) return false
         if (sourceContext != other.sourceContext) return false
         if (targetContext != other.targetContext) return false
         if (targetUri != other.targetUri) return false
@@ -117,15 +109,11 @@ var PRETTY_PRINT = false
 
 fun String.toFullPath() = "$archivesAbs${this.substringBeforeLast("%")}"
 
-fun String.noTabs() = this.replace("\t", "  ").replace("\"", "'")
+fun String.noTabs() = replace("\t", "  ").replace("\"", "'")
 
 val archivesDir: String = "python" // Parent directory (assumed to contain `.tgz` files)
 val archivesAbs: String = "tgz:file://" + File(archivesDir).absolutePath
-fun String.archiveName() = substringAfter(archivesAbs).drop(1).substringBefore("/")
-
-/**
- * Extracts documents from archives in parallel and prints the links in CSV format.
- */
+fun String.archiveName() = substringAfter(archivesAbs).substringBefore("/")
 
 val LINK_CSV_HEADER = "link_text\t" +
         "source_hit_count\t" +
@@ -138,6 +126,10 @@ val LINK_CSV_HEADER = "link_text\t" +
         "target_document\t" +
         "link_fragment"
 
+/**
+ * Extracts documents from archives in parallel and prints the links in CSV format.
+ */
+
 fun printLinks() {
     println(LINK_CSV_HEADER)
 
@@ -148,12 +140,9 @@ fun printLinks() {
                 fetchLinks(archive)?.forEach { htmlLinkStream: Stream<Link?>? ->
                     try {
                         htmlLinkStream?.forEach { link: Link? ->
-                            if (link != null) {
-                                    println(link)
-                            }
+                            if (link != null) println(link)
                         }
                     } catch (e: Exception) {
-//                                System.err.println("Error reading stream $e")
                         e.printStackTrace()
                     }
                 }
@@ -172,15 +161,13 @@ fun printLinks() {
  */
 
 private fun fetchLinks(archive: File): Stream<Stream<Link?>?>? =
-    archive.getHtmlFiles()?.map { file ->
-        file.asHtmlDoc()?.getAllLinks(relativeTo = file)
-    }
+    archive.getHtmlFiles()?.map { file -> file.asHtmlDoc()?.getAllLinks(relativeTo = file) }
+
+val HTML_FILES = FileExtensionSelector(setOf("html", "htm"))
 
 fun File.getHtmlFiles(): Stream<FileObject>? =
     try {
-        VFS.getManager().resolveFile("tgz:${absolutePath}")
-            .findFiles(AllFileSelector()).asList().stream()
-            .filter { it.name.extension.toString().let { ext -> ext == "htm" || ext == "html" } }
+        VFS.getManager().resolveFile("tgz:${absolutePath}").findFiles(HTML_FILES).asList().stream()
     } catch (ex: Exception) {
         null
     }
@@ -194,8 +181,8 @@ val VALID_PHRASE = "$TEXT_OR_CODE$BALANCED_BRACKETS($TEXT_OR_CODE)*"
 //                                      LINK URI       FRAGMENT               ANCHOR TEXT
 val LINK_REGEX = Regex("<a[^<>]*href=\"([^<>#:?\"]*?)(#[^<>#:?\"]*)?\"[^<>]*>($VALID_PHRASE)</a>")
 
-val asciiRegex = Regex("[ -~]*")
-val previouslySeen = ConcurrentHashMap.newKeySet<Int>()
+val ASCII_REGEX = Regex("[ -~]*")
+val previouslyVisited = ConcurrentHashMap.newKeySet<Int>()
 
 /**
  * Returns all HTML links within a string whose anchor text is shorter than the string
@@ -208,38 +195,51 @@ private fun Document.getAllLinks(relativeTo: FileObject): Stream<Link?> =
     select("a[href]").stream().map { linkTag ->
         try {
             if (!linkTag.outerHtml().matches(LINK_REGEX) || MAX_LTEXT_LEN < linkTag.text().length) return@map null
-            val linkText = linkTag.text().normalize()
-            val hash = (linkText + relativeTo.toString()).hashCode()
-            if (hash in previouslySeen) return@map null else previouslySeen += hash
-            val sourceDocHits = search(linkText).toList()
+            val anchorText = linkTag.text().normalize()
+            val hash = (anchorText + relativeTo.toString()).hashCode()
+            if (hash in previouslyVisited) return@map null else previouslyVisited.add(hash)
+            val sourceDocHits = search(anchorText).toList()
             val targetUri = linkTag.attr("href")
-            val resolvedLink = relativeTo.parent.resolveFile(targetUri)
-            val targetDoc = resolvedLink.asHtmlDoc(resolvedLink.url.path)
-            val targetFragment = if (targetUri.contains("#")) targetUri.substringAfterLast("#") else ""
-            val targetDocHits = targetDoc?.search(linkText, targetFragment)?.toList() ?: emptyList()
+            val targetDocTrace = parseOrGetCachedDocTrace(anchorText, relativeTo, targetUri)
 
             val sourceTitle = title()
-            val targetTitle = targetDoc?.title() ?: ""
-            if (!(sourceTitle + targetTitle).matches(asciiRegex)) return@map null
+            if (!(sourceTitle + targetDocTrace.title).matches(ASCII_REGEX)) return@map null
 
-            if (MIN_KWIC_HITS < sourceDocHits.size && MIN_KWIC_HITS < targetDocHits.size) {
+            if (MIN_KWIC_HITS < sourceDocHits.size && MIN_KWIC_HITS < targetDocTrace.numHits) {
                 Link(
-                    linkText = linkText,
+                    anchorText = anchorText,
                     sourceHitCount = sourceDocHits.size,
-                    targetHitCount = targetDocHits.size,
+                    targetHitCount = targetDocTrace.numHits,
                     sourceTitle = title(),
-                    targetTitle = targetDoc?.title() ?: "",
+                    targetTitle = targetDocTrace.title,
                     sourceContext = sourceDocHits,
-                    targetContext = targetDocHits,
+                    targetContext = targetDocTrace.concordances,
                     sourceUri = relativeTo.toString(),
-                    targetUri = resolvedLink.toString().substringBeforeLast("#"),
-                    targetFragment = targetFragment
+                    targetUri = targetDocTrace.uri,
+                    targetFragment = targetDocTrace.fragment
                 )
             } else null
         } catch (ex: Exception) {
             null
         }
     }
+
+// A summarized link target (i.e. anchor text concordances within the target document)
+data class DocTrace(val title: String, val uri: String, val fragment: String, val concordances: List<String>) {
+    val numHits = concordances.size
+}
+
+val docTraceCache = ConcurrentHashMap<Pair<String, String>, DocTrace>()
+fun parseOrGetCachedDocTrace(anchorText: String, relativeTo: FileObject, targetUri: String): DocTrace {
+    val resolvedFile = relativeTo.parent.resolveFile(targetUri.substringBeforeLast("#"))
+    return docTraceCache.computeIfAbsent(Pair(anchorText, resolvedFile.url.path)) {
+        val targetDoc = resolvedFile.asHtmlDoc(resolvedFile.url.path)
+        val targetFragment = if ("#" in targetUri) targetUri.substringAfterLast("#") else ""
+        val targetDocHits = targetDoc?.search(anchorText, targetFragment)?.toList() ?: emptyList()
+        val targetTitle = targetDoc?.title() ?: ""
+        DocTrace(targetTitle, resolvedFile.toString(), targetFragment, targetDocHits)
+    }
+}
 
 fun String.normalize() = replace(Regex("\\s\\s+"), " ").trim()
 
@@ -249,19 +249,11 @@ fun Document.search(query: String, fragment: String = "", bufferLen: Int = MAX_C
             docText.substring(
                 (matchResult.range.first - bufferLen).coerceAtLeast(0), matchResult.range.first
             ) + " <<LTX>> " +
-                    docText.substring(
-                        matchResult.range.last + 1, ((matchResult.range.last + bufferLen)
-                            .coerceAtMost(docText.length))
-                    )
-        }.filter { it.matches(asciiRegex) }
-//                && previouslySeen.run {
-//                val hash = (query + it + this@search).hashCode()
-//                val cont = !contains(hash)
-//                add(hash)
-//                !cont
-//            }
-//        }
-    }.take(99)
+            docText.substring(
+                matchResult.range.last + 1, ((matchResult.range.last + bufferLen).coerceAtMost(docText.length))
+            )
+        }.filter { it.matches(ASCII_REGEX) }
+    } //.take(99)
 
 private fun Document.extractFragmentText(fragment: String): String =
     select(fragment)?.first()?.parents()
