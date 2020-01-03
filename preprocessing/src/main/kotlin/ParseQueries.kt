@@ -19,7 +19,7 @@ fun String.archive() = substringAfter(archivesAbs).drop(1).substringBefore("/")
 
 fun String.targetDoc(): Document? =
     try {
-        VFS.getManager().resolveFile(this)?.asHtmlDoc() ?: null
+        VFS.getManager().resolveFile(this)?.asHtmlDoc()
     } catch (ex: Exception) {
         null
     }
@@ -27,7 +27,7 @@ fun String.targetDoc(): Document? =
 val WORDS_CTX_LEN = 20
 
 fun <T> Iterator<T>.takeOrEvictFrom(queue: EvictingQueue<T>) {
-    if (hasNext()) queue.add(next()) else if (queue.isNotEmpty()) queue.remove()
+    if (hasNext()) queue += next() else if (queue.isNotEmpty()) queue.remove()
 }
 
 /* Generates a concordance list for every word in a string, with the keyword located in the dead center of the list. For
@@ -53,12 +53,12 @@ fun String.extractConcordances(query: String? = null): List<String> {
     return words.fold(mutableListOf()) { concordances, word ->
         trailingIterator.takeOrEvictFrom(trailingTerms)
         if (word == query)
-            concordances.add(leadingTerms.joinToString(" ") + " <<LTX>> " + trailingTerms.joinToString(" "))
+            concordances += leadingTerms.joinToString(" ") + " <<LTX>> " + trailingTerms.joinToString(" ")
         else if(query.isNullOrBlank())
-            concordances.add(leadingTerms.joinToString(" ") + " $word " + trailingTerms.joinToString(" "))
+            concordances += leadingTerms.joinToString(" ") + " $word " + trailingTerms.joinToString(" ")
 
         // Backfill leading words
-        leadingTerms.add(word)
+        leadingTerms += word
 
         concordances
     }
@@ -111,7 +111,8 @@ fun buildIndex(file: String) {
 }
 
 val TOP_K_DOCS = 20
-fun String.topURIsMatchingQuery() = invertedIndex[this].sortedBy { -phraseCounts["$this@$it"] }.take(TOP_K_DOCS)
+fun String.topURIsMatchingQuery() =
+    invertedIndex[this].sortedBy { -phraseCounts["$this@$it"] }.take(TOP_K_DOCS)
 
 fun main(args: Array<String>) {
     val linksFile = args[0]

@@ -1,4 +1,4 @@
-import com.google.common.collect.EvictingQueue
+
 import org.apache.commons.vfs2.AllFileSelector
 import org.apache.commons.vfs2.FileObject
 import org.apache.commons.vfs2.VFS
@@ -210,7 +210,7 @@ private fun Document.getAllLinks(relativeTo: FileObject): Stream<Link?> =
             if (!linkTag.outerHtml().matches(LINK_REGEX) || MAX_LTEXT_LEN < linkTag.text().length) return@map null
             val linkText = linkTag.text().normalize()
             val hash = (linkText + relativeTo.toString()).hashCode()
-            if (hash in previouslySeen) return@map null else previouslySeen.add(hash)
+            if (hash in previouslySeen) return@map null else previouslySeen += hash
             val sourceDocHits = search(linkText).toList()
             val targetUri = linkTag.attr("href")
             val resolvedLink = relativeTo.parent.resolveFile(targetUri)
