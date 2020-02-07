@@ -10,7 +10,7 @@ version = "1.0-SNAPSHOT"
 
 repositories {
     mavenCentral()
-    jcenter()
+    maven(url = "https://dl.bintray.com/egor-bogomolov/astminer/")
 }
 
 dependencies {
@@ -23,6 +23,7 @@ dependencies {
     implementation("org.apache.lucene:lucene-core:8.3.0")
     implementation("org.apache.lucene:lucene-queryparser:8.3.0")
     implementation("org.apache.lucene:lucene-analyzers-common:8.3.0")
+    implementation("io.github.vovak.astminer", "astminer", "0.5")
 }
 
 tasks {
