@@ -1,0 +1,63 @@
+\documentclass{article}
+
+% if you need to pass options to natbib, use, e.g.:
+%     \PassOptionsToPackage{numbers, compress}{natbib}
+% before loading neurips_2019
+
+% ready for submission
+% \usepackage{neurips_2019}
+
+% to compile a preprint version, e.g., for submission to arXiv, add add the
+% [preprint] option:
+%     \usepackage[preprint]{neurips_2019}
+
+% to compile a camera-ready version, add the [final] option, e.g.:
+\usepackage[final]{neurips_2019}
+
+% to avoid loading the natbib package, add option nonatbib:
+%     \usepackage[nonatbib]{neurips_2019}
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+
+\title{A Common Graph for Code Search and Document Recommendation}
+
+\author{Breandan Consididne}
+
+\begin{document}
+
+    \maketitle
+
+    \begin{abstract}
+Semantic information plays a key role in the code search and synthesis settings. In this work, we propose a graph representation for code search and document recommendation which incorporates semantic and relational features of the surrounding program, including a novel flow-based representation of source code which incorporates semantic features from the call graph as well as hierarchial information about the context in which it occurs. We connect this graph to a natural language corpus of developer documents which share the same token, and demonstrate the effectiveness of this representation on three downstream tasks: code search, document recommendation and entity linking within developer documentation.
+    \end{abstract}
+
+    \section{Introduction}
+
+In addition to its syntactic features, source code contains a rich denotational and operational semantics defined by the host language. By incorporating semantic information, we can reason about program transformations over semantically equivalent but syntactically distict code fragments. Certain semantic relationships, such as data or control flow may be represented as a directed acyclic graph which admits linear-time decidablility for a broader class of problems, including shortest path and rechability queries.
+
+Many programming languages provide a type system for specifying values which facilitate static analyses such as nullity~\citep{ekman2007pluggable} and shape inference~\citep{considine2019kotlingrad}, allowing us to reason about program behavior without explicitly executing the program. In this work, we propose a graph representation for code search and document recommendation which incorporates semantic features of the type system, as well as the abstract syntax tree in which it occurs.
+
+    DAGs have applications in natural languages as well. Consider the sentences in the previous paragraph, which can be rewritten in any order without disturbing its semantic meaning. In contrast, the sentences in this paragraph have a meaningful sequential entailment, and cannot be reordered without harming readability. Therefore, it is important to capture and represent order-independent features when building language models. This allows us model semantic relationships between and among related entities in natural language, such as co-references, semantic entailment and other features which would be difficult to capture using a sequence-based approach.
+
+    Web based documentation often takes the form of XML-structured text, which follows an explicit tree-based structure, and whose links form a directed graph of between documents in a corpus. Both of these provide useful graphical information: the XML tree contains useful information about the location in the document in relation to the other sections and which defined the visual prominence of the text in question.
+
+    All of these are graphs!
+
+    \section{Prior work}
+
+\citet{si2018learning} introduce a control-flow representation for source code which incorporates elements of the syntax tree and surrounding context.
+
+    \section{Method}
+
+    It is often the case that two documents share a common token. If the token is rare, this indicates they refer to a common entity. But which entity? In developer documentation, this token may occur infrequently, or inside a tree-structured format. We would like to capture not only the token, but a representation of the surrounding context. Many documents link to code, but code very seldomly links to a document. We would like to infer which documents which are relevant to a particular section of code, based on the graph of documents and the graph of code. To infer links between these two domains requires a multi-relational graph representation. We also need an AST of statically typed computer programs from GitHub. We choose Java, which has a wide variety of parsing tools, including \citet{kovalenko2019pathminer}.
+    \subsection{Dataset}
+
+\bibliography{neurips_2019}
+\end{document}
