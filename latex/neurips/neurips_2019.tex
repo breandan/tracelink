@@ -12,7 +12,7 @@
 %     \usepackage[preprint]{neurips_2019}
 
 % to compile a camera-ready version, add the [final] option, e.g.:
-\usepackage[final]{neurips_2019}
+\usepackage{neurips_2019}
 
 % to avoid loading the natbib package, add option nonatbib:
 %     \usepackage[nonatbib]{neurips_2019}
@@ -26,41 +26,43 @@
 \usepackage{nicefrac}       % compact symbols for 1/2, etc.
 \usepackage{microtype}      % microtypography
 
-\title{A Common Graph Representation for\\Source Code and Natural Language}
+\title{A Common Graph Representation for\\Source Code and Developer Documentation}
 
-%\author{Breandan Considine\\
-%breandan.considine@mail.mcgill.ca\\
-%McGill University}
+\author{Breandan Considine\\
+breandan.considine@mail.mcgill.ca\\
+McGill University}
 
 \begin{document}
 
 \maketitle
 
 \begin{abstract}
-Semantic information plays a key role in the code search and synthesis settings. In this work, we propose a graph-based representation for code search and document recommendation which incorporates semantic and relational features from the type system and dataflow graph. We connect this graph to a natural language corpus of developer documents, and demonstrate the effectiveness of a graph-based representation on three downstream tasks: code search, document recommendation and entity linking within developer documentation.
+Semantic information plays a key role in the code search and synthesis settings. In this work, we propose a graph-based representation for source code and natural language which incorporates semantic and relational features from both domains. We apply this graph to a parsing a corpus of code and developer documents, and demonstrate the effectiveness of a common graph-based representation on three downstream tasks: code search, document recommendation and link prediction.
 \end{abstract}
 
 \section{Background and motivation}
 
-In addition to its syntactic structure, source code contains a rich denotational and operational semantics~\citep{henkel2018code}. In order to reason about code in semantically similar but syntactically diverse settings, developers must build mental models which incorporate semantic features from the call graph and surrounding typing context. Many semantic features, like data and control flow can be represented by a directed acyclic graph (DAG), which admits linear-time solutions to a number of graph problems, e.g. topological sorting, single-source shortest path and reachability queries.
+In addition to its syntactic structure, source code contains a rich denotational and operational semantics~\citep{henkel2018code}. To effectively reason about code in semantically similar but syntactically diverse settings requires models which incorporate semantic features from the call graph~\citep{gu2016deep} and surrounding typing context~\citep{allamanis2017learning}. Many semantic features, such as data and control flow~\citep{si2018learning} can be represented by a directed acyclic graph (DAG), which admits linear-time solutions to a number of graph problems, including topological sorting, single-source shortest path and reachability queries.
 
 Some programming languages allow users to specify which type of values will inhabit a given variable at runtime. Types allow the compiler to reason about certain properties like nullity~\citep{ekman2007pluggable} and shape~\citep{considine2019kotlingrad}. While types many not appear explicitly in source code, they can often be inferred from the surrounding context using a dataflow graph (DFG). Java, one of the most popular programming languages today, recently introduced local variable type inference~\citet{liddell2019analyzing}, which allows variable types to be omitted, and later inferred by the compiler.
 
-DAGs also have important applications in natural language parsing~\citep{sagae2008shift, quernheim2012dagger}. Consider the sentences in the previous paragraph, which can be shuffled without altering its meaning. In contrast, deranging the sentences in this paragraph would produce a much less coherent text. Various attempts to represent permutation-invariant properties when constructing language models have been suggested~\citep{vinyals2015pointer}. These allow us to model semantic relationships between natural language entities, such as co-reference, entailment, dependence and other properties which are difficult to capture with a purely sequence-based approach.
+DAGs also have important applications in natural language parsing~\citep{sagae2008shift, quernheim2012dagger}. Various attempts to build permutation-invariant representations for language modeling have been proposed, most notably the pointer network~\citep{vinyals2015pointer}. Pointer networks allow us to capture long-term semantic relations between natural language entities, and have important applications in dependency parsing~\citep{ma2018stack}, named-entity recognition~\citep{lample2016neural}, and other tasks where sequence-based representations struggle. \citet{li2017code} extend this work with a copy-mechanism to handle out-of-vocabulary tokens for source code.
 
-Source code for popular software projects is often accompanied by web-based developer documentation. Such documentation is often represented by tree-based markup languages like HTML or Markdown, which contain a collection of natural language, links to other documents, and instructions for how the content should be visually rendered. Both the link graph and the AST of the parent document contain useful information: the syntax tree describes the text in relation to the other entities in the same document, while the link graph describes the relationshp between the document and related documents or source code entities.
-
-Prior work has explored the association between comments and source code entities~\citep{panthaplackel2020associating}. \citet{si2018learning} introduce a control-flow representation for source code which incorporates elements of the syntax tree and surrounding context.
+Prior work has explored the association between comments and source code entities~\citep{panthaplackel2020associating} in Java code bases. Source code for popular software projects is often accompanied by web-based developer documentation, typically stored in tree-based markup languages like HTML or Markdown. Such documents often contain a collection of natural language, hyperlinks to other documents. Both the link graph and the AST of the parent document contain relevant information: the syntax tree describes the text in relation to the other entities in the document hierarchy~\citep{yang2016hierarchical}, while the link graph describes the relationship between the parent document and related documents or source code entities.
 
 \section{Proposed approach}
 
-In order to relate the graph of documents to source code, a heuristic is needed. For source code, a good heuristic is the presence of an unambiguous token. This token can be a code-like fragment or other entity such as text.
+Our goal is as follows: given a single token in either source code or developer documentation, to predict relevant entities in the same corpus.
 
-It is often the case that two documents share a common token. If the token is rare, the co-occurence indicates they refer to a common entity. But which entity? In order to determine the referent, we need a representation of the surrounding context that . While many documents occasionally link to source code directly, source code very seldomly contains links to a HTML document.
+In order to relate the graph of documents to source code, a heuristic is needed. For source code, a good heuristic is the presence of an unambiguous token. This token can be a code-like fragment or other entity.
 
-We would like to infer which documents which are relevant to a particular section of code, based on the graph of documents and the graph of code. To infer links between these two domains requires building a multi-relational graph representation. We also need an AST of statically typed computer programs from GitHub. We choose Kotlin, which has a variety of parsing tools for source code~\citep{kovalenko2019pathminer} and natural language~\citep{grella2018non}.
+It is often the case that two documents share a common token. If the token is rare, the co-occurrence indicates they refer to a common entity. But which entity? In order to determine the referent, we need a representation of the surrounding context and the contexts in which the referent occurs. While many documents occasionally link to source code directly, source code almost never contains links to developer documents.
+
+We would like to infer which documents are relevant to a particular section of code, based on the document graph and the code graph. To infer links between these two domains requires building a multi-relational graph representation. We also need an AST of statically typed computer programs on GitHub. We choose Java, which has a variety of parsing tools for source code~\citep{kovalenko2019pathminer} and natural language~\citep{grella2018non}.
 
 \section{Data availability and computational requirements}
+
+Our dataset consists of Java projects collected from the Zeal developer docs, and their accompanying source code, collected from GitHub. All projects have a collection of code and a collection of documents.
 
 \bibliography{neurips_2019}
 \bibliographystyle{plainnat}
