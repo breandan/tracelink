@@ -28,7 +28,9 @@
 
 \title{A Common Graph Representation for\\Source Code and Natural Language}
 
-\author{Breandan Consididne}
+%\author{Breandan Considine\\
+%breandan.considine@mail.mcgill.ca\\
+%McGill University}
 
 \begin{document}
 
@@ -38,29 +40,27 @@
 Semantic information plays a key role in the code search and synthesis settings. In this work, we propose a graph-based representation for code search and document recommendation which incorporates semantic and relational features from the type system and dataflow graph. We connect this graph to a natural language corpus of developer documents, and demonstrate the effectiveness of a graph-based representation on three downstream tasks: code search, document recommendation and entity linking within developer documentation.
 \end{abstract}
 
-\section{Introduction}
+\section{Background and motivation}
 
-In addition to its syntactic features, source code contains a rich denotational and operational semantics~\citep{henkel2018code}. We propose a representation of source code which incorporates semantic features from the call graph as well as hierarchical information about the typing context in which it occurs. This allows us to reason about program transformations in semantically similar but syntactically distinct fragments. Some semantic relationships, such as data or control flow may be represented by a directed acyclic graph (DAG) which admits linear-time solutions to a broad class of problems, including topological sorting, single-source shortest path and reachability queries.
+In addition to its syntactic structure, source code contains a rich denotational and operational semantics~\citep{henkel2018code}. In order to reason about code in semantically similar but syntactically diverse settings, developers must build mental models which incorporate semantic features from the call graph and surrounding typing context. Many semantic features, like data and control flow can be represented by a directed acyclic graph (DAG), which admits linear-time solutions to a number of graph problems, e.g. topological sorting, single-source shortest path and reachability queries.
 
-Many programming languages allow the user to specify which types of values will inhabit a given variable, allowing tools to perform efficient static analyses such as nullity~\citep{ekman2007pluggable} and shape inference~\citep{considine2019kotlingrad} without executing the program. Although types may not explicitly occur inside text, they can be often be inferred from the surrounding context using a DAG-based representation. Java, one of the most popular programming languages, recently adopted a feature called local variable type inference~\citet{liddell2019analyzing}, in which variable types can be omitted and inferred by the compiler in a straightforward manner.
+Some programming languages allow users to specify which type of values will inhabit a given variable at runtime. Types allow the compiler to reason about certain properties like nullity~\citep{ekman2007pluggable} and shape~\citep{considine2019kotlingrad}. While types many not appear explicitly in source code, they can often be inferred from the surrounding context using a dataflow graph (DFG). Java, one of the most popular programming languages today, recently introduced local variable type inference~\citet{liddell2019analyzing}, which allows variable types to be omitted, and later inferred by the compiler.
 
-DAGs have applications in natural languages as well~\citep{sagae2008shift, quernheim2012dagger}. Consider the sentences in the previous paragraph, which can be rewritten in any order without changing its semantic meaning. In contrast, these sentences have a meaningful sequential entailment, and shuffling them would make the paragraph much less coherent. Thus, it is important to capture and represent permutation-invariant features when building language models.~\citep{vinyals2015pointer} Doing so allows us to model semantic relationships between and among related entities in natural language, such as co-references, semantic entailment and other features which are difficult to capture with a purely sequence-based approach.
+DAGs also have important applications in natural language parsing~\citep{sagae2008shift, quernheim2012dagger}. Consider the sentences in the previous paragraph, which can be shuffled without altering its meaning. In contrast, deranging the sentences in this paragraph would produce a much less coherent text. Various attempts to represent permutation-invariant properties when constructing language models have been suggested~\citep{vinyals2015pointer}. These allow us to model semantic relationships between natural language entities, such as co-reference, entailment, dependence and other properties which are difficult to capture with a purely sequence-based approach.
 
-Source code for widely used projects is often accompanied by web-based developer documentation. Such documentation often takes the form of HTML or Markdown-structured text, which is syntactically an AST and often contains links to other documents, which can be arranged to form a directed graph between documents. Both the link graph and the AST of the parent document contain useful information: the document tree contains information about the location of the text in relation to the other sections and defines the layout of text in a browser.
+Source code for popular software projects is often accompanied by web-based developer documentation. Such documentation is often represented by tree-based markup languages like HTML or Markdown, which contain a collection of natural language, links to other documents, and instructions for how the content should be visually rendered. Both the link graph and the AST of the parent document contain useful information: the syntax tree describes the text in relation to the other entities in the same document, while the link graph describes the relationshp between the document and related documents or source code entities.
 
-\section{Prior work}
+Prior work has explored the association between comments and source code entities~\citep{panthaplackel2020associating}. \citet{si2018learning} introduce a control-flow representation for source code which incorporates elements of the syntax tree and surrounding context.
 
-\citet{si2018learning} introduce a control-flow representation for source code which incorporates elements of the syntax tree and surrounding context.
-
-\section{Method}
+\section{Proposed approach}
 
 In order to relate the graph of documents to source code, a heuristic is needed. For source code, a good heuristic is the presence of an unambiguous token. This token can be a code-like fragment or other entity such as text.
 
-It is often the case that two documents share a common token. If the token is rare, the co-occurence indicates they refer to a common entity. But which entity? In order to determine the referent, we need a representation of the surrounding context but a representation of the surrounding context. While many documents occasionally link to source code directly, source code very seldomly contains links to a HTML document.
+It is often the case that two documents share a common token. If the token is rare, the co-occurence indicates they refer to a common entity. But which entity? In order to determine the referent, we need a representation of the surrounding context that . While many documents occasionally link to source code directly, source code very seldomly contains links to a HTML document.
 
 We would like to infer which documents which are relevant to a particular section of code, based on the graph of documents and the graph of code. To infer links between these two domains requires building a multi-relational graph representation. We also need an AST of statically typed computer programs from GitHub. We choose Kotlin, which has a variety of parsing tools for source code~\citep{kovalenko2019pathminer} and natural language~\citep{grella2018non}.
 
-\subsection{Dataset}
+\section{Data availability and computational requirements}
 
 \bibliography{neurips_2019}
 \bibliographystyle{plainnat}
