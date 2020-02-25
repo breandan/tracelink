@@ -27,6 +27,125 @@
 \usepackage{microtype}      % microtypography
 \usepackage{graphviz}
 \usepackage{auto-pst-pdf}
+\usepackage{listings}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{framed}
+% Code listings
+%\usepackage[scaled]{beramono}
+\usepackage{fontspec}
+\setmonofont{JetBrains Mono}
+\usepackage{ocr}
+\usepackage[skins,breakable,listings]{tcolorbox}
+
+\usepackage{accsupp}
+\newcommand{\noncopyable}[1]{%
+    \BeginAccSupp{method=escape,ActualText={}}%
+    #1%
+    \EndAccSupp{}%
+}
+
+\lstdefinelanguage{kotlin}{
+    comment=[l]{//},
+    commentstyle={\color{gray}\ttfamily},
+    emph={delegate, filter, firstOrNull, forEach, it, lazy, mapNotNull, println, repeat, assert, with, head, tail, len, return@},
+    numberstyle=\noncopyable,
+    emphstyle={\color{OrangeRed}},
+    identifierstyle=\color{black},
+    keywords={abstract, actual, as, as?, break, by, class, companion, continue, data, do, dynamic, else, enum, expect, false, final, for, fun, get, if, import, in, infix, interface, internal, is, null, object, open, operator, override, package, private, public, return, sealed, set, super, suspend, this, throw, true, try, typealias, val, var, vararg, when, where, while, tailrec, reified},
+    keywordstyle={\color{NavyBlue}\bfseries},
+    morecomment=[s]{/*}{*/},
+    morestring=[b]",
+    morestring=[s]{"""*}{*"""},
+    ndkeywords={@Deprecated, @JvmField, @JvmName, @JvmOverloads, @JvmStatic, @JvmSynthetic, Array, Byte, Double, Float, Boolean, Int, Integer, Iterable, Long, Runnable, Short, String},
+    ndkeywordstyle={\color{BurntOrange}\bfseries},
+    sensitive=true,
+    stringstyle={\color{ForestGreen}\ttfamily},
+    literate={`}{{\char0}}1
+}
+
+\usepackage{lipsum}
+\tcbuselibrary{listings,breakable}
+
+\newtcblisting{javalisting}[1][]{%
+    breakable=false,
+    listing only,
+    boxsep=-1.5pt,
+    top=-1pt,
+    bottom=-0.5pt,
+    listing options={
+        language=kotlin,
+        basicstyle=\ttfamily\tiny,
+        numberstyle=\footnotesize\noncopyable,
+        tabsize=2,
+        numbers=right,
+        breaklines=true,
+        inputencoding=utf8,
+        escapeinside={(*@}{@*)},
+        #1
+    },
+}
+
+\tcbset{
+    enhanced jigsaw,
+    breakable,
+    listing only,
+    boxsep=-1pt,
+    top=-1pt,
+    bottom=-0.5pt,
+    right=-0.5pt,
+    overlay first={
+        \node[black!50] (S) at (frame.south) {\Large\ding{34}};
+        \draw[dashed,black!50] (frame.south west) -- (S) -- (frame.south east);
+    },
+    overlay middle={
+        \node[black!50] (S) at (frame.south) {\Large\ding{34}};
+        \draw[dashed,black!50] (frame.south west) -- (S) -- (frame.south east);
+        \node[black!50] (S) at (frame.north) {\Large\ding{34}};
+        \draw[dashed,black!50] (frame.north west) -- (S) -- (frame.north east);
+    },
+    overlay last={
+        \node[black!50] (S) at (frame.north) {\Large\ding{34}};
+        \draw[dashed,black!50] (frame.north west) -- (S) -- (frame.north east);
+    },
+    before={\par\vspace{10pt}},
+    after={\par\vspace{\parskip}\noindent}
+}
+
+\newcommand*{\inlineimg}[1]{%
+    \raisebox{-.3\baselineskip}{%
+        \includegraphics[
+            height=\baselineskip,
+            width=\baselineskip,
+            keepaspectratio,
+        ]{#1}%
+    }%
+}
+
+\definecolor{slightgray}{rgb}{0.90, 0.90, 0.90}
+
+\usepackage{soul}
+\makeatletter
+\def\SOUL@hlpreamble{%
+    \setul{}{3.0ex}%
+    \let\SOUL@stcolor\SOUL@hlcolor%
+    \SOUL@stpreamble%
+}
+\makeatother
+
+\newcommand{\inline}[1]{%
+    \begingroup%
+    \sethlcolor{slightgray}%
+    \hl{\ttfamily\footnotesize #1}%
+    \endgroup
+}
+
+\newcommand{\tinline}[1]{%
+    \begingroup%
+    \sethlcolor{slightgray}%
+    \hl{\ttfamily\tiny #1}%
+    \endgroup
+}
 
 \title{A Common Graph Representation for\\Source Code and Developer Documentation}
 
@@ -70,25 +189,43 @@ To perform our experiments, we require a large number of CPUs for semantic parsi
 
 \section{Data}
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+Our dataset consists of two complementary datasets: abstract syntax trees collected from Java source code and accompanying developer documentation. The Java code is parsed by the astminer~\citep{kovalenko2019pathminer} project and the natural language dependency graph is constructed by the CoreNLP~\citep{manning2014stanford} library. Consider the following AST, parsed from the \href{https://www.eclipse.org/collections/}{Eclipse Collections} Java project:
 
-Consider the following AST, parsed from a Java project:
+\vspace{20pt}
 
-\begin{figure}
+\begin{figure}[H]
     \centering
     \input{ast}
-    \caption{AST from a simple Java file.}
+%    \caption{This AST was parsed from the following code snippet:}
     \label{fig:ast}
 \end{figure}
 
-Consider the following dependency graph, parsed from a Javadoc:
+\vspace{-30pt}The AST depicted above was generated by parsing the following code snippet:
 
-\begin{figure}
+\begin{javalisting}
+public void lastKey_throws() {
+    new ImmutableTreeMap<>(new TreeSortedMap<>()).lastKey();
+}
+\end{javalisting}
+
+Now consider the following dependency graph, taken from a Javadoc in the same project:
+
+\begin{figure}[H]
     \centering
     \input{eng}
-    \caption{Dependency parse graph from a Javadoc.}
+    \caption{This graph was parsed from the following comment:
+        ``The advantages to using this container over a \footnotesize\texttt{Map<K, Collection<V>{}>} is
+        that all of the handling of the value collection can be done automatically.
+        It also allows implementations to further specialize in how duplicate values
+        will be handled. Value collections with list semantics would allow
+        duplicate values for a key, while those implementing set semantics would not.
+        The value collections can never be empty.''
+    }
     \label{fig:eng}
 \end{figure}
+
+Our goal in this project is to connect the two graphs using a common representation for source code and natural language. In the absence of explicit \texttt{@link} or \texttt{@see} annotations, in order to connect these two representations, we must infer the semantic entities.
+
 \clearpage
 \newpage
 
