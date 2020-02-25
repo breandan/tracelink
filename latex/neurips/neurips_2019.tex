@@ -25,6 +25,8 @@
 \usepackage{amsfonts}       % blackboard math symbols
 \usepackage{nicefrac}       % compact symbols for 1/2, etc.
 \usepackage{microtype}      % microtypography
+\usepackage{graphviz}
+\usepackage{auto-pst-pdf}
 
 \title{A Common Graph Representation for\\Source Code and Developer Documentation}
 
@@ -65,6 +67,21 @@ Java, one of the most popular programming languages on GitHub, is a statically t
 We construct two datasets consisting of naturally-occurring links between developer documentation and source code, and a surrogate set of links constructed by matching lexical tokens available in both domains. Our target is the recovery of ground truth links in our test set and surrogate links in the lexical matching graph. By adding weighted edges between source code and documentation and learning the relations using, e.g. a pointer network architecture, we evaluate our approach on reconstructing synthetic links between tokens contained in code-like fragments and markup entities which refer to the selected token. In addition, we evaluate our approach both on D2D and C2C link retrieval, as well as precision and recall on the surrogate link graph.
 
 To perform our experiments, we require a large number of CPUs for semantic parsing, link extraction and graph preprocessing, and a single P100 GPU for training a graph neural network. We have applied and received access to the Niagra CC cluster.
+
+\section{Data}
+
+Consider the following AST, parsed from a Java project:
+
+\begin{figure}
+    \centering
+    \input{ast}
+    \caption{AST from a simple Java file.}
+    \label{fig:ast}
+\end{figure}
+
+Consider the following dependency graph, parsed from a JavaDoc:
+
+
 
 \bibliography{neurips_2019}
 \bibliographystyle{plainnat}
