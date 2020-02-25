@@ -23,11 +23,15 @@ dependencies {
   implementation("org.apache.lucene:lucene-core:8.3.0")
   implementation("org.apache.lucene:lucene-queryparser:8.3.0")
   implementation("org.apache.lucene:lucene-analyzers-common:8.3.0")
-  implementation("io.github.vovak.astminer", "astminer", "0.5")
+  implementation("io.github.vovak.astminer:astminer:0.5")
+  implementation("edu.stanford.nlp:stanford-corenlp:3.9.2")
+  implementation("edu.stanford.nlp:stanford-corenlp:3.9.2:models")
+  implementation("edu.stanford.nlp:stanford-corenlp:3.9.2:models-english")
 }
 
 tasks {
-  listOf("ParseDocs", "ParseLinks", "ParseQueries", "QueryDocs", "ParseCode").forEach {
+  listOf("ParseDocs", "ParseLinks", "ParseQueries",
+      "QueryDocs", "ParseJava", "ParseEnglish").forEach {
     register(it, JavaExec::class) {
       findProperty("retty")?.let { args = listOf("1") }
       findProperty("rocess")?.let { args = listOf(it.toString()) }
