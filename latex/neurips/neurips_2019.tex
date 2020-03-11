@@ -147,7 +147,7 @@
     \endgroup
 }
 
-\title{A Common Graph Representation for\\Source Code and Developer Documentation}
+\title{A Graph-Based Intermediate Representation\\for Java Code and Developer Documentation}
 
 \author{Breandan Considine\\
 breandan.considine@mail.mcgill.ca\\
@@ -158,14 +158,14 @@ McGill University}
 \maketitle
 
 \begin{abstract}
-Semantic information plays a key role in the code search and synthesis settings. In this work, we propose a graph-based representation for source code and natural language which incorporates semantic and relational features from both domains. We apply this graph to a parsing a corpus of code and developer docs, and demonstrate the effectiveness of a common graph-based representation on three downstream tasks: code search, document recommendation and link prediction.
+Semantic information plays a key role in the code search and synthesis settings. In this work, we propose a graph-based representation for source code and natural language which incorporates semantic and relational features from both domains. We apply this graph to parsing a corpus of Java code and developer docs, and demonstrate the effectiveness of a common graph-based representation on three downstream tasks: code search, document recommendation and link prediction.
 \end{abstract}
 
 \section{Background and motivation}
 
-In addition to its syntactic structure, source code contains a rich denotational and operational semantics~\citep{henkel2018code}. To effectively reason about code in semantically similar but syntactically diverse settings requires models which incorporate features from the call graph~\citep{gu2016deep, 10.1145/3361242.3362774} and surrounding typing context~\citep{allamanis2017learning}. Many semantic features, such as data and control flow~\citep{si2018learning} can be represented as a directed acyclic graph (DAG), which admits linear-time solutions to a number of graph problems, including topological sorting, single-source shortest path and reachability queries.
+In addition to its syntactic structure, source code contains a rich denotational and operational semantics~\citep{henkel2018code}. To effectively reason about code in semantically similar but syntactically diverse settings requires models which incorporate features from the call graph~\citep{gu2016deep, liu2019neural} and surrounding typing context~\citep{allamanis2017learning}. Many semantic features, such as data and control flow~\citep{si2018learning} can be represented as a directed acyclic graph (DAG), which admits linear-time solutions to a number of graph problems, including topological sorting, single-source shortest path and reachability queries.
 
-Natural language also contains semantic information which can be represented using graphs. The NLP community has a rich set of graph based representations, including \citet{reddy2016transforming}'s and other typed attribute grammars which can be used to reason about syntactic and semantic relations. The pointer network architecture~\citep{vinyals2015pointer, vinyals2015order} can be used to construct permutation-invariant semantic relations between natural language entities, and have important applications in dependency parsing~\citep{ma2018stack}, named-entity recognition~\citep{lample2016neural}, and other language modeling where sequence-based representations fall short. \citet{li2017code} extend pointer networks with a copy-mechanism to handle out-of-vocabulary code tokens.
+Natural language also contains semantic information which can be represented using graphs. The NLP community has a rich set of graph based representations, including \citet{reddy2016transforming}'s and other typed attribute grammars which can be used to reason about syntactic and semantic relations. The pointer network architecture~\citep{vinyals2015pointer, vinyals2015order} can be used to construct permutation-invariant semantic relations between natural language entities, and have important applications in dependency parsing~\citep{ma2018stack}, named-entity recognition~\citep{lample2016neural}, and other language modeling tasks where sequence-based representations fall short. \citet{li2017code} extend pointer networks with a copy-mechanism to handle out-of-vocabulary code tokens.
 
 Content recommendation for doc-to-doc (D2D) and code-to-code (C2C) settings can be solved with existing link prediction~\citep{zhang2018link} and code embedding~\citep{gu2018deep} techniques, but cross-domain transfer remains challenging. \citet{robillard2015recommending, robillard2017demand} first explore the task of predicting reference API docs from source code using manual annotation. Prior work also studies the association between comments and code entities~\citep{panthaplackel2020associating} using machine learning, but only within source code.
 
@@ -181,7 +181,7 @@ To compensate for the sparsity of hyperlinks between code and documentation, we 
 
 \section{Data availability}
 
-Java, one of the most prolific programming languages on GitHub, is a statically typed language with a high volume of API documentation. With has a variety of tools source code~\citep{parr2013definitive, hosseini2013javaparser, kovalenko2019pathminer} and natural language~\citep{manning2014stanford, grella2018non} parsing, it makes an ideal corpus for both analysis and implementation. Our dataset consists of Java repositories on GitHub, and their accompanying developer documents. All projects in our dataset have a collection of source code files and multiple related repositories on GitHub.
+Java, one of the most prolific programming languages on GitHub, is a statically typed language with a high volume of API documentation. With has a variety of tools source code~\citep{parr2013definitive, hosseini2013javaparser, kovalenko2019pathminer} and natural language~\citep{manning2014stanford, grella2018non} parsing, it is a convenient language for both analysis and implementation. Our dataset consists of Java repositories on GitHub, and their accompanying developer documents. All projects in our dataset have a collection of source code files and multiple related repositories on GitHub.
 
 We construct two datasets consisting of naturally-occurring links between developer docs and source code, and a surrogate set of links constructed by matching lexical tokens available in both domains. Our target is recovery of ground truth links in the test set and surrogate links in the lexical matching graph. By adding weighted edges between source code and docs, we evaluate our approach by predicting synthetic links between tokens contained in code fragments and markup entities which refer to the selected token. In addition, we evaluate our approach on both D2D and C2C link retrieval, as well as precision and recall on the surrogate link relations.
 
