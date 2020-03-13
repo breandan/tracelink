@@ -38,12 +38,34 @@
 \usepackage{ocr}
 \usepackage[skins,breakable,listings]{tcolorbox}
 
+\newcommand{\inline}[1]{%
+    \begingroup%
+    \sethlcolor{slightgray}%
+    \hl{\ttfamily\footnotesize #1}%
+    \endgroup
+}
+
+\usepackage{tikz}
+\usetikzlibrary{automata, positioning, arrows}
+
+\tikzset{
+    ->,  % makes the edges directed
+    >=stealth’, % makes the arrow heads bold
+    node distance=3cm, % specifies the minimum distance between two nodes. Change if necessary.
+    every state/.style={thick, fill=gray!10}, % sets the properties for each ’state’ node
+    initial text=$ $, % sets the text that appears on the start arrow
+}
+
 \usepackage{accsupp}
 \newcommand{\noncopyable}[1]{%
     \BeginAccSupp{method=escape,ActualText={}}%
     #1%
     \EndAccSupp{}%
 }
+
+\makeatletter
+\g@addto@macro\@floatboxreset\centering
+\makeatother
 
 \lstdefinelanguage{kotlin}{
     comment=[l]{//},
@@ -147,7 +169,7 @@
     \endgroup
 }
 
-\title{A Graph-Based Intermediate Representation\\for Java Code and Developer Documentation}
+\title{Learning to Search for Code}
 
 \author{Breandan Considine\\
 breandan.considine@mail.mcgill.ca\\
@@ -158,32 +180,99 @@ McGill University}
 \maketitle
 
 \begin{abstract}
-Semantic information plays a key role in the code search and synthesis settings. In this work, we propose a graph-based representation for source code and natural language which incorporates semantic and relational features from both domains. We apply this graph to parsing a corpus of Java code and developer docs, and demonstrate the effectiveness of a common graph-based representation on three downstream tasks: code search, document recommendation and link prediction.
+Semantic information plays a key role in the code search and synthesis settings. In this work, we propose a graph-based representation for source code and natural language which incorporates semantic and relational features from each domain. We apply this graph to parsing a corpus of Java code and developer docs, and demonstrate the effectiveness of a common graph-based representation on three downstream tasks: code search, document recommendation and entity link prediction.
 \end{abstract}
 
-\section{Background and motivation}
+\section{Introduction}
 
 In addition to its syntactic structure, source code contains a rich denotational and operational semantics~\citep{henkel2018code}. To effectively reason about code in semantically similar but syntactically diverse settings requires models which incorporate features from the call graph~\citep{gu2016deep, liu2019neural} and surrounding typing context~\citep{allamanis2017learning}. Many semantic features, such as data and control flow~\citep{si2018learning} can be represented as a directed acyclic graph (DAG), which admits linear-time solutions to a number of graph problems, including topological sorting, single-source shortest path and reachability queries.
 
-Natural language also contains semantic information which can be represented using graphs. The NLP community has a rich set of graph based representations, including \citet{reddy2016transforming}'s and other typed attribute grammars which can be used to reason about syntactic and semantic relations. The pointer network architecture~\citep{vinyals2015pointer, vinyals2015order} can be used to construct permutation-invariant semantic relations between natural language entities, and have important applications in dependency parsing~\citep{ma2018stack}, named-entity recognition~\citep{lample2016neural}, and other language modeling tasks where sequence-based representations fall short. \citet{li2017code} extend pointer networks with a copy-mechanism to handle out-of-vocabulary code tokens.
+Natural language also contains semantic information which can be represented using graphs. The NLP community has a rich set of graph-based representations, including \citet{reddy2016transforming}'s and other typed attribute grammars which can be used to reason about syntactic and semantic relations. The pointer network architecture~\citep{vinyals2015pointer, vinyals2015order} can be used to construct permutation-invariant semantic relations between natural language entities, and has important applications in dependency parsing~\citep{ma2018stack}, named-entity recognition~\citep{lample2016neural}, and other semantic parsing tasks where sequence-based representations fall short. \citet{li2017code} extend pointer networks with a copy-mechanism to handle out-of-vocabulary code tokens.
 
-Content recommendation for doc-to-doc (D2D) and code-to-code (C2C) settings can be solved with existing link prediction~\citep{zhang2018link} and code embedding~\citep{gu2018deep} techniques, but cross-domain transfer remains challenging. \citet{robillard2015recommending, robillard2017demand} first explore the task of predicting reference API docs from source code using manual annotation. Prior work also studies the association between comments and code entities~\citep{panthaplackel2020associating} using machine learning, but only within source code.
+Content recommendation for doc-to-doc (D2D) and code-to-code (C2C) can be solved with existing link prediction~\citep{zhang2018link} and code embedding~\citep{gu2018deep} techniques, but cross-domain transfer remains challenging. \citet{robillard2015recommending, robillard2017demand} first explore the task of predicting reference API docs from source code using manual annotation. Prior work also studies the association between comments and code entities~\citep{iyer2018mappingp, anthaplackel2020associating} using machine learning, but only within source code.
 
 Maintainers of widely-used software projects often publish web-based developer docs, typically stored in markup languages like HTML or Markdown. These files contain a collection of natural language sentences, markup, and hyperlinks to other documents. Both the link graph and the document tree contain important semantic information: the markup describes the text in relation to the other entities in the document hierarchy~\citep{yang2016hierarchical}, while the link graph describes the relationship between the parent document and related documents or source code entities. Documents occasionally contain hyperlinks to source code, but source code rarely contains links to developer documents.
 
-Some programming languages allow users to specify which type of values will inhabit a given variable at runtime. Types allow the compiler to reason about certain properties like nullity~\citep{ekman2007pluggable} and shape~\citep{considine2019kotlingrad}. While types many not appear explicitly in source code, they can often be inferred from the surrounding context using a dataflow graph (DFG). The Java language recently introduced local variable type inference~\citet{liddell2019analyzing}, which allows variable types to be omitted, and later inferred by the compiler.
+Some programming languages allow users to specify which type of values will inhabit a given variable at runtime. Types allow the compiler to reason about certain properties like nullity~\citep{ekman2007pluggable} and shape~\citep{considine2019kotlingrad}. While types many not appear explicitly in source code, they can often be inferred from the surrounding context using a dataflow graph (DFG). For example, the Java language recently introduced local variable type inference~\citet{liddell2019analyzing}, which allows variable types to be omitted, and later inferred by the compiler.
 
-\section{Proposed approach}
+Given a single token in either source code or developer documentation and its surrounding context, what are the most relevant source code or documentation entities related to the token? We would like to infer which entities are related to a given token, based on the surrounding context. Learning relationships between these two domains usually requires langauge-specific parsers. Prior work has explored incorporating dataflow and type information~\citet{si2018learning, gu2018deep, liu2019neural}, as well as the markup language and link graph\citet{yang2016hierarchical, zhang2018link} to construct an embedding for code-like tokens used within documentation.
 
-Given a single token in either source code or developer documentation and its surrounding context, what are the most relevant source code or documentation entities related to the token? We would like to infer which entities are connected to a given token, based on the surrounding semantic context. Learning relationships between these two domains requires parsing both natural language and source code. Following \citet{si2018learning, gu2018deep, liu2019neural}, we use a node embedding on the dataflow graph and type environment, and following \citet{yang2016hierarchical, zhang2018link}, use the markup hierarchy and link graph to construct an embedding for code-like tokens used within documentation.
+When linking from code to documentation, or documentation to code, the sparsity of cross-domain links presents a significant challenge. To compensate for the sparsity of hyperlinks between code and documentation, we require a mapping between the documentation graph and source code entities. One heuristic which developers often use to discover relevant documents is text search. These tokens are often written in a domain specific language (DSL), either explicitly or implicitly takes the form of a regular expression (regex), which most search engines are capable of recognizing. Skilled users are able to rapidly construct a sequence of search tokens which retrieve the document with high probability while omitting irrelevant results.
 
-To compensate for the sparsity of hyperlinks between code and documentation, we need to construct bridge links between the documentation graph and source code entities. One heuristic which developers often use to discover relevant documents is plaintext search on a salient lexical string. Co-occurrence of an uncommon token is unlikely to be coincidence, and indicates that two entities are likely related, even though they may not share an explicit grammatical link. If we can recover this relationship using semantic and type-related information without observing the lexical token itself, this is a further indication our representation is providing useful information.
+Unlike natural language where entities are often ambiguous strings, source code often has a canonical representation which unambiguously identifies the entity in question. In most cases, entity linking in this setting consists of a simple set of pattern matching rules, which a skilled developer can recognize. Given a string, \tinline{AbstractSingletonProxyFactoryBean}, we observe it has the following properties:
+
+\begin{enumerate}
+    \item The string is camelcase, indicating it refers to an entity in a camel-case language.
+    \item The string contains the substring \tinline{Bean}, a common token in the Java language.
+    \item The string begins with a capital letter, indicating it refers to a \tinline{class}.
+\end{enumerate}
+
+To locate the entity in question we can simply execute the following command on a shell:
+
+\centerline{\tinline{\$ grep -r --include .java "class AbstractSingletonProxyFactoryBean" .}}
+
+%Alternatively, the following search produces the correct entity as the first result: \small{\url{https://www.google.com/search?q=github+"class+AbstractSingletonProxyFactoryBean"}}.
+
+We hypothesize that for most programming languages, there is a short query which unambiguously identifies the canonical entity and furthermore, it is possible to learn a program which synthesizes this query in a data-driven manner.
+
+\section{Background}
+
+\newcommand{\mor}{\ensuremath{\;\mid\;}}
+\newcommand{\code}[1]{\ensuremath{\texttt{\inline{#1}}}}
+\newcommand{\bnfrl}[1]{\ensuremath{\langle#1\rangle}}
+\allowdisplaybreaks
+
+Let $\Sigma = \{A, a, \ldots, Z, z, 0, 1, \ldots, 9\}$. Our language $J_{<}$ has the following productions:
+
+\begin{equation}
+    \bnfrl{exp} ::= \bnfrl{exp}\bnfrl{exp} \mor \bnfrl{exp}|\bnfrl{exp} \mor \code{(}\bnfrl{exp}\code{)} \mor \alpha \in \Sigma \mor \bnfrl{exp}\code{*} \mor
+    \code{.}
+\end{equation}
+
+An expression in this language corresponds to a regular expression, which is translatable to a non-deterministic finite automata (NFA) using the Glushkov construction~\citep{glushkov1961abstract}, as shown in \autoref{fig:regex_to_nfa}.
+
+\begin{figure}
+    \begin{tikzpicture}
+        \node[state, initial, accepting] (q1) {$q_1$};
+        \node[state, left of=q1] (q2) {$q_2$};
+        \node[state, left of=q2] (q3) {$q_3$};
+        \node[state, right of=q1] (q4) {$q_4$};
+        \node[state, above right of=q4] (q5) {$q_5$};
+        \node[state, below right of=q4] (q6) {$q_6$};
+        \draw
+%        (q1) edge[loop above] (q1)
+        (q1) edge[above] node{a} (q2)
+        (q1) edge[above] node{b} (q4)
+        (q2) edge[bend right] node{a} (q3)
+        (q3) edge[bend right] node{b} (q2)
+        (q4) edge[loop above] node{a} (q4)
+        (q4) edge[above] node{a} (q5)
+        (q6) edge[above] node{a} (q4)
+        (q5) edge[bend left] node{b} (q6)
+        (q6) edge[bend left] node{a} (q5)
+        ;
+%        (q2) edge[bend left, above] node{0} (q3)
+        ;
+%        (q2) edge[bend left, above] node{0} (q3)
+%        (q3) edge[bend left, below] node{0, 1} (q2);
+    \end{tikzpicture}
+    \caption{NFA corresponding to the regular expression $(a(ab)*)*(ba)*$.}
+    \label{fig:regex_to_nfa}
+\end{figure}
+
+The NFA can be translated to a deterministic finite automata (DFA) using the Rabin-Scott powerset construction~\citep{rabin1959finite}.
+
+Our goal is to synthesize a regular expression which retrieves a document based on the surrounding context.
+
+\section{Method}
+
+
 
 \section{Data availability}
 
-Java, one of the most prolific programming languages on GitHub, is a statically typed language with a high volume of API documentation. With has a variety of tools source code~\citep{parr2013definitive, hosseini2013javaparser, kovalenko2019pathminer} and natural language~\citep{manning2014stanford, grella2018non} parsing, it is a convenient language for both analysis and implementation. Our dataset consists of Java repositories on GitHub, and their accompanying developer documents. All projects in our dataset have a collection of source code files and multiple related repositories on GitHub.
+Java, one of the most prolific programming languages on GitHub, is a statically typed language with a high volume of API documentation. Offering a variety of tools for source code~\citep{parr2013definitive, hosseini2013javaparser, kovalenko2019pathminer} and natural language~\citep{manning2014stanford, grella2018non} parsing, it is a convenient language for both analysis and implementation. Our dataset consists of Java repositories on GitHub, and their accompanying developer documents. All projects in our dataset have a collection of source code files and multiple related repositories on GitHub.
 
-We construct two datasets consisting of naturally-occurring links between developer docs and source code, and a surrogate set of links constructed by matching lexical tokens available in both domains. Our target is recovery of ground truth links in the test set and surrogate links in the lexical matching graph. By adding weighted edges between source code and docs, we evaluate our approach by predicting synthetic links between tokens contained in code fragments and markup entities which refer to the selected token. In addition, we evaluate our approach on both D2D and C2C link retrieval, as well as precision and recall on the surrogate link relations.
+We construct two datasets consisting of naturally-occurring links between developer docs and source code, and a surrogate set of links constructed by matching lexical tokens available in both domains. Our target is recovery of ground truth links in the test set and surrogate links in the lexical matching graph. We first add weighted edges between code and docs, then evaluate our approach by predicting synthetic links between tokens contained in code fragments and markup entities which refer to the selected token. In addition, we evaluate our approach on both D2D and C2C link retrieval, as well as precision and recall on the surrogate link relations.
 
 Our data consists of two complementary datasets: abstract syntax trees collected from Java source code and developer documentation. We use the astminer~\citep{kovalenko2019pathminer} library to parse Java code, jsoup~\citep{hedley2009jsoup} to parse HTML and Stanford's CoreNLP~\citep{manning2014stanford} library to parse dependency graphs from developer docs. Consider the following AST, parsed from the \href{https://www.eclipse.org/collections/}{Eclipse Collections} Java project:
 
@@ -210,7 +299,7 @@ Now consider the following dependency graph, taken from a Javadoc in the same pr
     \centering
     \input{eng}
     \caption{This graph was parsed from the following comment:
-        ``The advantages to using this container over a \footnotesize\texttt{Map<K, Collection<V>{}>} is
+        ``The advantages to using this container over a \footnotesize\inline{Map<K, Collection<V>{}>} is
         that all of the handling of the value collection can be done automatically.
         It also allows implementations to further specialize in how duplicate values
         will be handled. Value collections with list semantics would allow
@@ -220,20 +309,22 @@ Now consider the following dependency graph, taken from a Javadoc in the same pr
     \label{fig:eng}
 \end{figure}
 
-Our goal is to connect these two graphs using a common representation for source code and natural language. Absent any explicit \texttt{@link} or \texttt{@see} annotations, in order to relate these two graphs, we must somehow infer the shared semantic entities, which we can do for a subset using a simple lexical matching procedure.
+Our goal is to connect these two graphs using a common representation for source code and natural language. Absent any explicit \inline{@link} or \inline{@see} annotations, in order to relate these two graphs, we must somehow infer the shared semantic entities, which we can do for a subset using a simple lexical matching procedure.
 
 \section{Experiment}
 
-We then train four link prediction models on the following datasets:
 
-\begin{itemize}
-    \item Code graph (CG)
-    \item Documentation graph (DG)
-    \item Both code and documentation graphs separately (CDG)
-    \item Single graph containing code and documentation entities related by lexical matching (LEX)
-\end{itemize}
 
-For each model, we evaluate our trained model on link prediction in the same setting and every other setting.
+%We then train four link prediction models on the following datasets:
+%
+%\begin{itemize}
+%    \item Code graph (CG)
+%    \item Documentation graph (DG)
+%    \item Both code and documentation graphs separately (CDG)
+%    \item Single graph containing code and documentation entities related by lexical matching (LEX)
+%\end{itemize}
+%
+%For each model, we evaluate our trained model on link prediction in the same setting and every other setting.
 
 \clearpage
 \newpage
