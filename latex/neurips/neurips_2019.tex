@@ -38,12 +38,7 @@
 \usepackage{ocr}
 \usepackage[skins,breakable,listings]{tcolorbox}
 
-\newcommand{\inline}[1]{%
-    \begingroup%
-    \sethlcolor{slightgray}%
-    \hl{\ttfamily\footnotesize #1}%
-    \endgroup
-}
+
 
 \usepackage{tikz}
 \usetikzlibrary{automata, positioning, arrows}
@@ -97,7 +92,7 @@
     bottom=-0.5pt,
     listing options={
         language=kotlin,
-        basicstyle=\ttfamily\tiny,
+        basicstyle=\ttfamily\small,
         numberstyle=\footnotesize\noncopyable,
         tabsize=2,
         numbers=right,
@@ -155,17 +150,10 @@
 }
 \makeatother
 
-\newcommand{\inline}[1]{%
-    \begingroup%
-    \sethlcolor{slightgray}%
-    \hl{\ttfamily\footnotesize #1}%
-    \endgroup
-}
-
 \newcommand{\tinline}[1]{%
     \begingroup%
     \sethlcolor{slightgray}%
-    \hl{\ttfamily\tiny #1}%
+    \hl{\ttfamily\footnotesize #1}%
     \endgroup
 }
 
@@ -180,7 +168,7 @@ McGill University}
 \maketitle
 
 \begin{abstract}
-Semantic information plays a key role in the code search and synthesis settings. In this work, we propose a graph-based representation for source code and natural language which incorporates semantic and relational features from each domain. We apply this graph to parsing a corpus of Java code and developer docs, and demonstrate the effectiveness of a common graph-based representation on three downstream tasks: code search, document recommendation and entity link prediction.
+Semantic information plays a key role in the code search and synthesis settings. In this work, we propose a regular expression for source code and natural language which incorporates semantic and relational features from each domain. We apply this graph to parsing a corpus of Java code and developer docs, and demonstrate the effectiveness of a model-based representation on three downstream tasks: code search, document recommendation and entity link prediction.
 \end{abstract}
 
 \section{Introduction}
@@ -213,23 +201,22 @@ To locate the entity in question we can simply execute the following command on 
 
 %Alternatively, the following search produces the correct entity as the first result: \small{\url{https://www.google.com/search?q=github+"class+AbstractSingletonProxyFactoryBean"}}.
 
-We hypothesize that for most programming languages, there is a short query which unambiguously identifies the canonical entity and furthermore, it is possible to learn a program which synthesizes this query in a data-driven manner.
+For most programming languages, most API entities are unambiguously named. We hypothesize there is a short query which uniquely identifies the canonical entity and furthermore, it is possible to learn a program which synthesizes a query that retrieves this entity in a data-driven manner.
 
 \section{Background}
 
 \newcommand{\mor}{\ensuremath{\;\mid\;}}
-\newcommand{\code}[1]{\ensuremath{\texttt{\inline{#1}}}}
+\newcommand{\code}[1]{\ensuremath{\texttt{\tinline{#1}}}}
 \newcommand{\bnfrl}[1]{\ensuremath{\langle#1\rangle}}
-\allowdisplaybreaks
 
-Let $\Sigma = \{A, a, \ldots, Z, z, 0, 1, \ldots, 9\}$. Our language $J_{<}$ has the following productions:
+Let $\Sigma = \{$\tinline{A}, \tinline{a}, \ldots, \tinline{Z}, \tinline{z}, \tinline{0}, \tinline{1}, \ldots, \tinline{9}, \tinline{\$}, \tinline{\textasciicircum}$\}$. Our language $J_{<}$ has the following productions:
 
 \begin{equation}
     \bnfrl{exp} ::= \bnfrl{exp}\bnfrl{exp} \mor \bnfrl{exp}|\bnfrl{exp} \mor \code{(}\bnfrl{exp}\code{)} \mor \alpha \in \Sigma \mor \bnfrl{exp}\code{*} \mor
     \code{.}
 \end{equation}
 
-An expression in this language corresponds to a regular expression, which is translatable to a non-deterministic finite automata (NFA) using the Glushkov construction~\citep{glushkov1961abstract}, as shown in \autoref{fig:regex_to_nfa}. The NFA can be translated to a deterministic finite automata (DFA) using the Rabin-Scott powerset construction~\citep{rabin1959finite}. Our goal is to synthesize a regular expression which retrieves a document based on the surrounding context.
+An expression in this language corresponds to a regular expression, reducible to a non-deterministic finite automata (NFA) using Glushkov's algorithm ~\citep{glushkov1961abstract}, as shown in \autoref{fig:regex_to_nfa}. NFA are also reducible to both deterministic finite automata (DFA) using the powerset construction~\citep{rabin1959finite} and regular expressions using Arden's Lemma~\citep{arden1961delayed}.
 
 \begin{figure}
     \begin{tikzpicture}
@@ -256,9 +243,21 @@ An expression in this language corresponds to a regular expression, which is tra
 %        (q2) edge[bend left, above] node{0} (q3)
 %        (q3) edge[bend left, below] node{0, 1} (q2);
     \end{tikzpicture}
-    \caption{NFA corresponding to the regular expression $(a(ab)*)*(ba)*$.}
+    \caption{NFA corresponding to the regular expression \tinline{(a(ab)*)*(ba)*}.}
     \label{fig:regex_to_nfa}
 \end{figure}
+
+Formally, an NFA is a 5-tuple $(Q, \Sigma, \Delta, q_0, F)$, where $Q$ is a finite set of states, $\Sigma$ is the alphabet, $\Delta :Q\times (\Sigma \cup \{\epsilon \})\rightarrow P(Q)$ is the transition function, $q_0 \in Q$ is the initial state and $F \subseteq Q$ are the terminal states. An NFA can be represented by a directed graph whose adjacency matrix is defined by the transition function, with edge labels representing symbols from the alphabet and binary node labels indicating whether the node is a terminal or nonterminal state.
+
+We pose the problem as a few-shot generative modeling task, where the input is a local graph consisting of the query text, and the output is an adjacency matrix defining the NFA. Our goal is to synthesize an NFA which accepts the target document and no other documents or as few others as possible from the entire corpus.
+
+\section{Method}
+
+Let $\mathcal T$ be a code token, corresponding to a node in a document graph $\mathcal D$, representing a semantic parse of the document's contents, and neighboring documents from the link graph. We train a meta learner $\mathcal M$ on the following objective:
+
+\begin{equation}
+    \mathbb{E}_{L\subset\mathcal{L}}[ \mathbb{E}_{S^L \subset\mathcal{D}, B^L \subset\mathcal{D}} [\sum_{(\mathbf{x}, y)\in B^L} \mathcal M_{g_\phi(\theta, S^L)}(y \vert \mathbf{x})]]
+\end{equation}
 
 \section{Data availability}
 
@@ -290,18 +289,11 @@ Now consider the following dependency graph, taken from a Javadoc in the same pr
 \begin{figure}[H]
     \centering
     \input{eng}
-    \caption{This graph was parsed from the following comment:
-        ``The advantages to using this container over a \footnotesize\inline{Map<K, Collection<V>{}>} is
-        that all of the handling of the value collection can be done automatically.
-        It also allows implementations to further specialize in how duplicate values
-        will be handled. Value collections with list semantics would allow
-        duplicate values for a key, while those implementing set semantics would not.
-        The value collections can never be empty.''
-    }
+    \caption{This graph was parsed from the following comment: ``The advantages to using this container over a \footnotesize\tinline{Map<K, Collection<V>{}>} is that all of the handling of the value collection can be done automatically. It also allows implementations to further specialize in how duplicate values will be handled. Value collections with list semantics would allow duplicate values for a key, while those implementing set semantics would not. The value collections can never be empty.''}
     \label{fig:eng}
 \end{figure}
 
-Our goal is to connect these two graphs using a common representation for source code and natural language. Absent any explicit \inline{@link} or \inline{@see} annotations, in order to relate these two graphs, we must somehow infer the shared semantic entities, which we can do for a subset using a simple lexical matching procedure.
+Our goal is to connect these two graphs using a common model for source code and natural language. Absent any explicit \tinline{@link} or \tinline{@see} annotations, in order to relate these two graphs, we must somehow infer the shared semantic entities, which we can do for a subset using a simple lexical matching procedure.
 
 
 
