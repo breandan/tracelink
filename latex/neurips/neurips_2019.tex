@@ -229,7 +229,7 @@ Let $\Sigma = \{A, a, \ldots, Z, z, 0, 1, \ldots, 9\}$. Our language $J_{<}$ has
     \code{.}
 \end{equation}
 
-An expression in this language corresponds to a regular expression, which is translatable to a non-deterministic finite automata (NFA) using the Glushkov construction~\citep{glushkov1961abstract}, as shown in \autoref{fig:regex_to_nfa}.
+An expression in this language corresponds to a regular expression, which is translatable to a non-deterministic finite automata (NFA) using the Glushkov construction~\citep{glushkov1961abstract}, as shown in \autoref{fig:regex_to_nfa}. The NFA can be translated to a deterministic finite automata (DFA) using the Rabin-Scott powerset construction~\citep{rabin1959finite}. Our goal is to synthesize a regular expression which retrieves a document based on the surrounding context.
 
 \begin{figure}
     \begin{tikzpicture}
@@ -259,14 +259,6 @@ An expression in this language corresponds to a regular expression, which is tra
     \caption{NFA corresponding to the regular expression $(a(ab)*)*(ba)*$.}
     \label{fig:regex_to_nfa}
 \end{figure}
-
-The NFA can be translated to a deterministic finite automata (DFA) using the Rabin-Scott powerset construction~\citep{rabin1959finite}.
-
-Our goal is to synthesize a regular expression which retrieves a document based on the surrounding context.
-
-\section{Method}
-
-
 
 \section{Data availability}
 
@@ -310,8 +302,6 @@ Now consider the following dependency graph, taken from a Javadoc in the same pr
 \end{figure}
 
 Our goal is to connect these two graphs using a common representation for source code and natural language. Absent any explicit \inline{@link} or \inline{@see} annotations, in order to relate these two graphs, we must somehow infer the shared semantic entities, which we can do for a subset using a simple lexical matching procedure.
-
-\section{Experiment}
 
 
 
