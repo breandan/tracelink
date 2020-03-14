@@ -10,26 +10,26 @@ import astminer.paths.toPathContext
 import java.io.File
 
 fun main(args: Array<String>) {
-    val dir = "${args.first()}/preprocessed"
-    val csvStorage = CsvPathStorage(dir)
-    val dotStorage = DotAstStorage()
-    File(args.first()).forFilesWithSuffix(".java") { file ->
-        val miner = PathMiner(PathRetrievalSettings(5, 5))
-        val parser = JavaParser()
-        val root = parser.parse(file.inputStream())
-        val paths = miner.retrievePaths(root ?: return@forFilesWithSuffix)
-        JavaMethodSplitter().splitIntoMethods(root).forEach {
-            println(it.name())
-            println(it.returnType())
-            println(it.enclosingElementName())
-            it.methodParameters.forEach { parameters ->
-                println("${parameters.name()} ${parameters.returnType()}")
-            }
-        }
-
-        dotStorage.store(root, root.getTypeLabel())
-        csvStorage.store(LabeledPathContexts(file.path, paths.map { toPathContext(it) }))
+  val dir = "${args.first()}/preprocessed"
+  val csvStorage = CsvPathStorage(dir)
+  val dotStorage = DotAstStorage()
+  File(args.first()).forFilesWithSuffix(".java") { file ->
+    val miner = PathMiner(PathRetrievalSettings(5, 5))
+    val parser = JavaParser()
+    val root = parser.parse(file.inputStream())
+    val paths = miner.retrievePaths(root ?: return@forFilesWithSuffix)
+    JavaMethodSplitter().splitIntoMethods(root).forEach {
+      println(it.name())
+      println(it.returnType())
+      println(it.enclosingElementName())
+      it.methodParameters.forEach { parameters ->
+        println("${parameters.name()} ${parameters.returnType()}")
+      }
     }
-    dotStorage.save(dir)
-    csvStorage.save()
+
+    dotStorage.store(root, root.getToken())
+    csvStorage.store(LabeledPathContexts(file.path, paths.map { toPathContext(it) }))
+  }
+  dotStorage.save(dir)
+  csvStorage.save()
 }
