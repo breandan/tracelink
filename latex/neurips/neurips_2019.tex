@@ -38,8 +38,6 @@
 \usepackage{ocr}
 \usepackage[skins,breakable,listings]{tcolorbox}
 
-
-
 \usepackage{tikz}
 \usetikzlibrary{automata, positioning, arrows}
 
@@ -50,17 +48,6 @@
     every state/.style={thick, fill=gray!10}, % sets the properties for each ’state’ node
     initial text=$ $, % sets the text that appears on the start arrow
 }
-
-\usepackage{accsupp}
-\newcommand{\noncopyable}[1]{%
-    \BeginAccSupp{method=escape,ActualText={}}%
-    #1%
-    \EndAccSupp{}%
-}
-
-\makeatletter
-\g@addto@macro\@floatboxreset\centering
-\makeatother
 
 \lstdefinelanguage{kotlin}{
     comment=[l]{//},
@@ -157,7 +144,7 @@
     \endgroup
 }
 
-\title{Learning to Search for Code}
+\title{Learning to parse developer documentation}
 
 \author{Breandan Considine\\
 breandan.considine@mail.mcgill.ca\\
@@ -168,42 +155,39 @@ McGill University}
 \maketitle
 
 \begin{abstract}
-Semantic information plays a key role in the code search and synthesis settings. In this work, we propose a regular expression for source code and natural language which incorporates semantic and relational features from each domain. We apply this graph to parsing a corpus of Java code and developer docs, and demonstrate the effectiveness of a model-based representation on three downstream tasks: code search, document recommendation and entity link prediction.
+Semantic information plays a key role in the code search and synthesis settings. In this work, we propose a regular expression synthesizer for link prediction in source code and API documentation which incorporates semantic and relational information the surrounding context. We apply our synthesizer to a link prediction task on a corpus of Java code and developer docs, and demonstrate the effectiveness of a model-based representation learning for link prediction in the source-to-source and doc-to-doc setting.
 \end{abstract}
 
 \section{Introduction}
 
-In addition to its syntactic structure, source code contains a rich denotational and operational semantics~\citep{henkel2018code}. To effectively reason about code in semantically similar but syntactically diverse settings requires models which incorporate features from the call graph~\citep{gu2016deep, liu2019neural} and surrounding typing context~\citep{allamanis2017learning}. Many semantic features, such as data and control flow~\citep{si2018learning} can be represented as a directed acyclic graph (DAG), which admits linear-time solutions to a number of graph problems, including topological sorting, single-source shortest path and reachability queries.
+In addition to its syntax, source code contains a rich denotational and operational semantics~\citep{henkel2018code}. To effectively reason about code in semantically similar but syntactically diverse settings requires models which incorporate features from the call graph~\citep{gu2016deep, liu2019neural} and surrounding typing context~\citep{allamanis2017learning}. Many semantic features, such as data and control flow~\citep{si2018learning} can be represented by a directed acyclic graph (DAG), which admits linear-time solutions to many graph problems, including topological sorting, single-source shortest path and reachability queries.
 
-Natural language also contains semantic information which can be represented using graphs. The NLP community has a rich set of graph-based representations, including \citet{reddy2016transforming}'s and other typed attribute grammars which can be used to reason about syntactic and semantic relations. The pointer network architecture~\citep{vinyals2015pointer, vinyals2015order} can be used to construct permutation-invariant semantic relations between natural language entities, and has important applications in dependency parsing~\citep{ma2018stack}, named-entity recognition~\citep{lample2016neural}, and other semantic parsing tasks where sequence-based representations fall short. \citet{li2017code} extend pointer networks with a copy-mechanism to handle out-of-vocabulary code tokens.
+Natural language has also developed a rich set of graph-based representations, including \citet{reddy2016transforming}'s and other typed attribute grammars which can be used to reason about syntactic and semantic relations between natural language entities. The pointer network architecture~\citep{vinyals2015pointer, vinyals2015order} can be used to construct permutation-invariant semantic relations between entities, and has important applications in dependency parsing~\citep{ma2018stack}, named-entity recognition~\citep{lample2016neural}, and other semantic parsing tasks where sequence-based representations fall short. \citet{li2017code} extend pointer networks with a copy-mechanism to handle out-of-vocabulary code tokens.
 
-Content recommendation for doc-to-doc (D2D) and code-to-code (C2C) can be solved with existing link prediction~\citep{zhang2018link} and code embedding~\citep{gu2018deep} techniques, but cross-domain transfer remains challenging. \citet{robillard2015recommending, robillard2017demand} first explore the task of predicting reference API docs from source code using manual annotation. Prior work also studies the association between comments and code entities~\citep{iyer2018mappingp, anthaplackel2020associating} using machine learning, but only within source code.
+Existing work has studied doc-to-doc (D2D) and code-to-code (C2C) entity linking by applying link prediction~\citep{zhang2018link} and code embedding~\citep{gu2018deep} techniques, but cross-domain transfer remains challenging. \citet{robillard2015recommending, robillard2017demand} first explore the task of predicting reference API docs from source code using manual annotation. Prior work also studies the association between comments and code entities~\citep{iyer2018mapping, panthaplackel2020associating} using machine learning, but only within source code.
 
-Maintainers of widely-used software projects often publish web-based developer docs, typically stored in markup languages like HTML or Markdown. These files contain a collection of natural language sentences, markup, and hyperlinks to other documents. Both the link graph and the document tree contain important semantic information: the markup describes the text in relation to the other entities in the document hierarchy~\citep{yang2016hierarchical}, while the link graph describes the relationship between the parent document and related documents or source code entities. Documents occasionally contain hyperlinks to source code, but source code rarely contains links to developer documents.
+Maintainers of widely-used software projects often publish web-based developer docs, typically stored in markup languages like HTML or Markdown. These files contain a collection of natural language sentences, markup, and hyperlinks to other documents and source code entities. Both the document tree and link graph contain important semantic information: the markup describes the text in relation to the other entities in the document hierarchy~\citep{yang2016hierarchical}, while the link graph describes the relationship between the parent document and related documents or source code entities. Documents occasionally contain hyperlinks to source code, but source code rarely contains links to developer documents.
 
-Some programming languages allow users to specify which type of values will inhabit a given variable at runtime. Types allow the compiler to reason about certain properties like nullity~\citep{ekman2007pluggable} and shape~\citep{considine2019kotlingrad}. While types many not appear explicitly in source code, they can often be inferred from the surrounding context using a dataflow graph (DFG). For example, the Java language recently introduced local variable type inference~\citet{liddell2019analyzing}, which allows variable types to be omitted, and later inferred by the compiler.
+Prior work has studied dataflow and type-based representations~\citep{si2018learning, gu2018deep, liu2019neural}, as well as document hierarchy~\citep{yang2016hierarchical} and link-based~\citep{zhang2018link} information. In our work, we attempt to bridge these domains by learning a common representation for both programming and natural languages.
 
-Given a single token in either source code or developer documentation and its surrounding context, what are the most relevant source code or documentation entities related to the token? We would like to infer which entities are related to a given token, based on the surrounding context. Learning relationships between these two domains usually requires langauge-specific parsers. Prior work has explored incorporating dataflow and type information~\citet{si2018learning, gu2018deep, liu2019neural}, as well as the markup language and link graph\citet{yang2016hierarchical, zhang2018link} to construct an embedding for code-like tokens used within documentation.
-
-When linking from code to documentation, or documentation to code, the sparsity of cross-domain links presents a significant challenge. To compensate for the sparsity of hyperlinks between code and documentation, we require a mapping between the documentation graph and source code entities. One heuristic which developers often use to discover relevant documents is text search. These tokens are often written in a domain specific language (DSL), either explicitly or implicitly takes the form of a regular expression (regex), which most search engines are capable of recognizing. Skilled users are able to rapidly construct a sequence of search tokens which retrieve the document with high probability while omitting irrelevant results.
-
-Unlike natural language where entities are often ambiguous strings, source code often has a canonical representation which unambiguously identifies the entity in question. In most cases, entity linking in this setting consists of a simple set of pattern matching rules, which a skilled developer can recognize. Given a string, \tinline{AbstractSingletonProxyFactoryBean}, we observe it has the following properties:
+Unlike natural language where polysemy is common, named entities in most programming languages are relatively unique, even across unrelated APIs. Given a single token in source code or documentation and its surrounding context, a skilled developer is quickly able to locate the entity, even without prior familiarity with the API in question. For example, we observe the string \tinline{AbstractSingletonProxyFactoryBean} has the following properties:
 
 \begin{enumerate}
-    \item The string is camelcase, indicating it refers to an entity in a camel-case language.
+    \item The string is camel-case, indicating it refers to an entity in a camel-case language.
     \item The string contains the substring \tinline{Bean}, a common token in the Java language.
-    \item The string begins with a capital letter, indicating it refers to a \tinline{class}.
+    \item The string begins with a capital letter, indicating it refers to a class or interface.
 \end{enumerate}
 
-To locate the entity in question we can simply execute the following command on a shell:
+Developers often use a tool called \tinline{grep} to locate files, which accepts queries written in a domain specific language (DSL) known as regular expression (regex). Skilled \tinline{grep} users are able to rapidly construct a query which retrieves the document with high probability whilst omitting irrelevant results. Assuming the aforementioned entity in question exists on a filesystem, one might simply execute the following command to locate it:
 
 \centerline{\tinline{\$ grep -r --include .java "class AbstractSingletonProxyFactoryBean" .}}
 
 %Alternatively, the following search produces the correct entity as the first result: \small{\url{https://www.google.com/search?q=github+"class+AbstractSingletonProxyFactoryBean"}}.
 
-For most programming languages, most API entities are unambiguously named. We hypothesize there is a short query which uniquely identifies the canonical entity and furthermore, it is possible to learn a program which synthesizes a query that retrieves this entity in a data-driven manner.
+We hypothesize it is possible to construct a short query which uniquely identifies any named entity (assuming it exists) in a corpus of software documents and furthermore, it is possible to learn a program which synthesizes a query retrieving the canonical entity with high probability, given a named entity reference and its surrounding documentation context.
 
 \section{Background}
+
 
 \newcommand{\mor}{\ensuremath{\;\mid\;}}
 \newcommand{\code}[1]{\ensuremath{\texttt{\tinline{#1}}}}
@@ -216,7 +200,7 @@ Let $\Sigma = \{$\tinline{A}, \tinline{a}, \ldots, \tinline{Z}, \tinline{z}, \ti
     \code{.}
 \end{equation}
 
-An expression in this language corresponds to a regular expression, reducible to a non-deterministic finite automata (NFA) using Glushkov's algorithm ~\citep{glushkov1961abstract}, as shown in \autoref{fig:regex_to_nfa}. NFA are also reducible to both deterministic finite automata (DFA) using the powerset construction~\citep{rabin1959finite} and regular expressions using Arden's Lemma~\citep{arden1961delayed}.
+An expression in $J_<$ is a regular expression, reducible to a non-deterministic finite automaton (NFA) using Glushkov's algorithm ~\citep{glushkov1961abstract}, as shown in \autoref{fig:regex_to_nfa}. NFA are reducible to both deterministic finite automata (DFA) using the powerset construction~\citep{rabin1959finite} and regular expressions using Arden's Lemma~\citep{arden1961delayed}.
 
 \begin{figure}
     \begin{tikzpicture}
@@ -247,19 +231,21 @@ An expression in this language corresponds to a regular expression, reducible to
     \label{fig:regex_to_nfa}
 \end{figure}
 
-Formally, an NFA is a 5-tuple $(Q, \Sigma, \Delta, q_0, F)$, where $Q$ is a finite set of states, $\Sigma$ is the alphabet, $\Delta :Q\times (\Sigma \cup \{\epsilon \})\rightarrow P(Q)$ is the transition function, $q_0 \in Q$ is the initial state and $F \subseteq Q$ are the terminal states. An NFA can be represented by a directed graph whose adjacency matrix is defined by the transition function, with edge labels representing symbols from the alphabet and binary node labels indicating whether the node is a terminal or nonterminal state.
+Formally, an NFA is a 5-tuple $\langle Q, \Sigma, \Delta, q_0, F \rangle$, where $Q$ is a finite set of states, $\Sigma$ is the alphabet, $\Delta :Q\times (\Sigma \cup \{\epsilon \})\rightarrow P(Q)$ is the transition function, $q_0 \in Q$ is the initial state and $F \subseteq Q$ are the terminal states. An NFA can be represented as a directed graph whose adjacency matrix is defined by the transition function, with edge labels representing symbols from the alphabet and binary node labels indicating whether the node is a terminal or nonterminal state.
 
-We pose the problem as a few-shot generative modeling task, where the input is a local graph consisting of the query text, and the output is an adjacency matrix defining the NFA. Our goal is to synthesize an NFA which accepts the target document and no other documents or as few others as possible from the entire corpus.
+We pose the problem as a few-shot generative modeling task, where the input is a local graph consisting of the query text and graph context, and the output is an adjacency matrix defining the NFA. Our goal is to synthesize an NFA which accepts the target document and no other documents or as few others as possible from the entire corpus.
 
 \section{Method}
 
-Let $\mathcal T$ be a code token, corresponding to a node in a document graph $\mathcal D$, representing a semantic parse of the document's contents, and neighboring documents from the link graph. We train a meta learner $\mathcal M$ on the following objective:
+Let $\mathcal D$ be a document graph, constructed by semantically parsing the document's contents, and neighboring documents from the link graph. Let $\mathcal T$ be a code token, corresponding to a node in a document graph $\mathcal D$.  We train a meta learner $\mathcal M$ on the following objective:
 
 \begin{equation}
     \mathbb{E}_{L\subset\mathcal{L}}[ \mathbb{E}_{S^L \subset\mathcal{D}, B^L \subset\mathcal{D}} [\sum_{(\mathbf{x}, y)\in B^L} \mathcal M_{g_\phi(\theta, S^L)}(y \vert \mathbf{x})]]
 \end{equation}
 
-\section{Data availability}
+Following prior work in few-shot meta-learning, our model is trained using a meta-training and test set, where the synthesizer constructs a regex to retrieve the documents, attends over the results and incrementally refines the query, then selects a single document to link. Our synthesizer is trained on a subgraph representing the local context, parsed from the document's contents and neighboring documents from the local link graph. We then compare precision and recall over the test set.
+
+\section{Dataset}
 
 Java, one of the most prolific programming languages on GitHub, is a statically typed language with a high volume of API documentation. Offering a variety of tools for source code~\citep{parr2013definitive, hosseini2013javaparser, kovalenko2019pathminer} and natural language~\citep{manning2014stanford, grella2018non} parsing, it is a convenient language for both analysis and implementation. Our dataset consists of Java repositories on GitHub, and their accompanying developer documents. All projects in our dataset have a collection of source code files and multiple related repositories on GitHub.
 
