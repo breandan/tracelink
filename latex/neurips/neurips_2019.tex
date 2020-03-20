@@ -225,17 +225,17 @@ Our goal is to connect these two graphs using a common model for source code and
 
 \section{Method}
 
-\newcommand{\mor}{\ensuremath{\;\mid\;}}
+\newcommand{\mor}{\ensuremath{\;|\;}}
 \newcommand{\code}[1]{\ensuremath{\texttt{\tinline{#1}}}}
 \newcommand{\bnfrl}[1]{\ensuremath{\langle#1\rangle}}
 
-Let $\Sigma = \{$\tinline{A}, \tinline{a}, \ldots, \tinline{Z}, \tinline{z}, \tinline{0}, \tinline{1}, \ldots, \tinline{9}, \tinline{\$}, \tinline{\textasciicircum}$\}$. Our language $J_{<}$ has the following productions:
+Let $\Sigma := $ \tinline{A} | \tinline{a} | \ldots | \tinline{Z} | \tinline{z} | \tinline{0} | \tinline{1} | \ldots | \tinline{9} | \tinline{ } | \tinline{\textasciicircum}. Our language $J_{<}$ has the following productions:
 
 \begin{equation}\label{eq:grammar}
-    \bnfrl{exp} ::= \bnfrl{exp}\circ\bnfrl{exp} \mor \bnfrl{exp}\code{|}\bnfrl{exp} \mor \code{(}\bnfrl{exp}\code{)} \mor \alpha \in \Sigma \mor \bnfrl{exp}\code{*} \mor \code{!}\bnfrl{exp} \mor \code{.}
+    \bnfrl{exp} := \bnfrl{exp}\cdot\bnfrl{exp} \mor \bnfrl{exp}\code{|}\bnfrl{exp} \mor \code{(}\bnfrl{exp}\code{)} \mor \Sigma \mor \bnfrl{exp}\code{*} \mor \code{!}\bnfrl{exp} \mor \code{.}
 \end{equation}
 
-An expression in $J_<$ is an RE, reducible to a non-deterministic finite automaton (NFA) using the \citet{glushkov1961abstract} algorithm as shown in \autoref{fig:regex_to_nfa} (independently discovered by McNaughton-Yamada-Thompson). NFA are reducible to both deterministic finite automata (DFA) using the powerset construction~\citep{rabin1959finite} and regular expressions using Arden's Lemma~\citep{arden1961delayed}. Regular expressions can also be converted directly to DFA as described by \citet{brzozowski1964derivatives} and \citet{berry1986regular}.
+Where ` $\cdot$ ' indicates concatenation. $J_<$ is a regular language, reducible to a non-deterministic finite automaton (NFA) using the \citet{glushkov1961abstract} algorithm as shown in \autoref{fig:regex_to_nfa} (independently discovered by McNaughton-Yamada-Thompson). NFA are reducible to both deterministic finite automata (DFA) using the powerset construction~\citep{rabin1959finite} and regular expressions using Arden's Lemma~\citep{arden1961delayed}. Regular expressions can also be converted directly to DFA as described by \citet{brzozowski1964derivatives} and \citet{berry1986regular}.
 
 % https://www3.nd.edu/~kogge/courses/cse30151-fa17/Public/other/tikz_tutorial.pdf
 % Glushkov's algorithm: https://www.irif.fr/~jep/PDF/MPRI/MPRI.pdf#subsection.3.5.2
@@ -286,13 +286,13 @@ Our synthesizer is trained on a node embedding from the local graph context, a s
     \frac{\partial}{\partial\tinline{t}\texttt{\footnotesize t}}\mathcal Q = \{ s | \tinline{t}\texttt{\footnotesize t}s \in \mathcal Q\}
 \end{equation}
 
-If we interpret the operators $|$ and $\circ$ from \autoref{eq:grammar} as $+$ and $\times$ respectively, we recover the standard rules from differential calculus:
+If we interpret the operators ` $|$ ' and ` $\cdot$ ' from \autoref{eq:grammar} as ` $+$ ' and ` $\times$ ' respectively, we recover the standard rules from differential calculus:
 
 \begin{equation}
-    \frac{\partial\tinline{t}\texttt{\footnotesize t}}{\partial\tinline{t}\texttt{\footnotesize t}} = \{\varnothing\}
+    \frac{\partial\tinline{t}\texttt{\footnotesize t}}{\partial\tinline{t}\texttt{\footnotesize t}} = \epsilon
 \end{equation}
 \begin{equation}
-    \frac{\partial\lambda}{\partial\tinline{t}\texttt{\footnotesize t}} = \varnothing
+    \frac{\partial\epsilon}{\partial\tinline{t}\texttt{\footnotesize t}} = \varnothing
 \end{equation}
 \begin{equation}
     \frac{\partial\mathcal Q*}{\partial\tinline{t}\texttt{\footnotesize t}} = \frac{\partial\mathcal Q}{\partial\tinline{t}\texttt{\footnotesize t}}\mathcal Q*
@@ -301,10 +301,10 @@ If we interpret the operators $|$ and $\circ$ from \autoref{eq:grammar} as $+$ a
     \frac{\partial\neg\mathcal Q}{\partial\tinline{t}\texttt{\footnotesize t}} = \neg\frac{\partial\mathcal Q}{\partial\tinline{t}\texttt{\footnotesize t}}
 \end{equation}
 \begin{equation}
-    \frac{\partial\mathcal Q\circ\mathcal S}{\partial\tinline{t}\texttt{\footnotesize t}} = \frac{\partial\mathcal Q}{\partial\tinline{t}\texttt{\footnotesize t}} \circ \mathcal S \cup \frac{\partial\mathcal S}{\partial\tinline{t}\texttt{\footnotesize t}} \circ \mathcal Q
+    \frac{\partial\mathcal Q\cdot\mathcal S}{\partial\tinline{t}\texttt{\footnotesize t}} = \frac{\partial\mathcal Q}{\partial\tinline{t}\texttt{\footnotesize t}} \cdot \mathcal S \cup \frac{\partial\mathcal S}{\partial\tinline{t}\texttt{\footnotesize t}} \cdot \mathcal Q
 \end{equation}
 
-Given some RE corresponding to a regular language $\mathcal R$\footnote{Hereafter, we use $\mathcal R$ to denote the regex and the language it recognizes interchangeably.}, this tells us how symbolic changes to the RE will change the language it recognizes. Suppose we have a corpus $\mathcal C$ and a set of target documents $\mathcal D^* \subseteq \mathcal C$. We define a loss on $\mathcal R$, $\mathcal L_{\mathcal R}: \langle \mathcal R , \mathcal C , \mathcal D^*\rangle \mapsto \mathbb R$ as follows:
+Given some RE corresponding to a regular language $\mathcal R$\footnote{Hereafter, we use $\mathcal R$ to denote the regex and the language it recognizes interchangeably.}, this tells us how symbolic changes to the RE will change the language it recognizes. Suppose we have a corpus $\mathcal C$ and a set of target documents $\mathcal D^* \subseteq \mathcal C$. We define a loss, $\mathcal L_{\mathcal R}: \langle \mathcal R , \mathcal C , \mathcal D^*\rangle \mapsto \mathbb R$ as follows:
 
 \begin{equation}
     \mathcal L(\mathcal R, \mathcal C, \mathcal D^*) = \mathbb{E}_{\mathcal D^*\sim \mathcal C}\frac{|\overbrace{\mathcal R \cap \mathcal C}^{P}| + |\overbrace{\mathcal C \setminus \mathcal R}^{N}|}{|\underbrace{\mathcal R \cap \mathcal D^*}_{TP}| + |\underbrace{\mathcal C \setminus \mathcal D^* \setminus \mathcal R}_{TN}|}
@@ -313,6 +313,74 @@ Given some RE corresponding to a regular language $\mathcal R$\footnote{Hereafte
 Given some set of strings we want to recognize, this ratio tells us how many documents from the corpus $\mathcal C$ does the regex accept $|\mathcal R \cap \mathcal C|$ and reject $|\mathcal C \setminus \mathcal R|$, over how many documents it should accept and reject. We need this ratio to be as low as possible for effective retrieval.
 
 Suppose we have a function $\mathcal G_{\mathbf \theta}: \mathbb{R}^n \times \mathbb{R}^{|\mathbf \theta|} \rightarrow \mathcal R$, which takes a contextual entity embedding $\mathbb R^n$, a set of parameters $\theta$, and returns a regular expression $\mathcal R$. Our goal is to minimize $\mathcal L(\mathcal G_{\mathbf \theta}, \mathbf X, \mathbf Y)$, where $\mathbf X$ is a set of unlabeled context embeddings and $\mathbf Y$ is the ground truth link target. To compute $\nabla_\theta \mathcal L(\mathcal G)$, we need $\nabla_\Sigma \mathcal R$, the vector of partial derivatives of $\mathcal R$ with respect to every symbol in the alphabet, $\Sigma$. \citet{brzozowski1964derivatives} shows us how to backpropogate loss through $\mathcal R$, into parameter space $\mathbb{R}^{|\mathbf \theta|}$.
+
+\begin{figure}
+    \centering
+    \begin{tikzpicture}[{every node/.style={black,font=\sffamily\Large}}]
+    \clip (-3,-3) rectangle (6.5,3);
+    \def\ccirc{(0,0) circle (2cm)}
+    \def\cccirc{(0,0) circle (3cm)}
+    \def\rcirc{(3.5,0) circle (3cm)}
+    \def\nullcirc{(0,5.1) circle (4.5cm)}
+    \def\boundingbox{(-3,-3) rectangle (6,4.5)}
+
+    \definecolor{handsome}{HTML}{FFFFFF}
+    \definecolor{jerk}{HTML}{EF3A43}
+    \definecolor{batman}{HTML}{FBC405}
+    \definecolor{dumb}{HTML}{B7CA54}
+    \definecolor{smart}{HTML}{C7DAC4}
+    \definecolor{nerd}{HTML}{FF4444}
+    \definecolor{nice}{HTML}{FF8888}
+
+    % fill circles
+    \fill[dumb] \cccirc;
+    \fill[smart] \ccirc node {\Huge$\mathcal C$};
+    \fill[handsome] \nullcirc;
+    \fill[nice, opacity=0.5] \rcirc node {\Huge$\mathcal R$};
+
+    % fill intersections
+
+    \begin{scope}
+        \clip \boundingbox \rcirc;
+        \clip \ccirc;
+        \fill[nerd] \nullcirc;
+    \end{scope}
+    \begin{scope}
+        \clip \boundingbox \nullcirc;
+        \clip \ccirc;
+        \fill[nerd] \rcirc;
+    \end{scope}
+    \begin{scope}
+        \clip \boundingbox \ccirc;
+        \clip \cccirc;
+        \fill[nice] \rcirc;
+    \end{scope}
+    \begin{scope}
+        \clip \boundingbox \ccirc;
+        \clip \cccirc;
+        \fill[nice] \nullcirc;
+    \end{scope}
+    \begin{scope}
+        \clip \boundingbox \ccirc;
+        \clip \rcirc;
+        \clip \cccirc;
+        \fill[dumb] \nullcirc node[xshift=1.8cm, yshift=-1cm];
+    \end{scope}
+    \begin{scope}
+        \clip \ccirc;
+        \clip \rcirc;
+        \clip \nullcirc;
+        \fill[green] \boundingbox;
+    \end{scope}
+
+    \node at (1.15,1.08) {\Large TP};
+    \node at (0.25,2.0) {\Huge $\mathcal D^{*}$};
+    \node at (-0.2,1.2) {\Large FN};
+    \node at (-0.9,-0.9) {\Large TN};
+    \node at (1.3,-0.3) {\Large FP};
+\end{tikzpicture}
+\end{figure}
+
 
 \section{Preliminary Results}
 
