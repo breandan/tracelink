@@ -161,13 +161,13 @@ Semantic information plays a key role in the code search and synthesis settings.
 
 In addition to its syntax, source code contains a rich denotational and operational semantics~\citep{henkel2018code}. To effectively reason about code in semantically similar but syntactically diverse settings requires models which incorporate features from the call graph~\citep{gu2016deep, liu2019neural} and surrounding typing context~\citep{allamanis2017learning}. Many semantic features, such as data and control flow~\citep{si2018learning} can be represented by a directed acyclic graph (DAG), which admits linear-time solutions to many graph problems, including topological sorting, single-source shortest path and reachability queries.
 
-The field of natural language has also developed a rich set of graph-based representations, including \citet{reddy2016transforming}'s and other typed attribute grammars which can be used to reason about syntactic and semantic relations between natural language entities. The pointer network architecture~\citep{vinyals2015pointer, vinyals2015order} can be used to construct permutation-invariant semantic relations between entities, and has important applications in dependency parsing~\citep{ma2018stack}, named-entity recognition~\citep{lample2016neural}, and other semantic parsing tasks where sequence-based representations fall short. \citet{li2017code} extend pointer networks with a copy-mechanism to handle out-of-vocabulary code tokens.
+The field of natural language has also developed a rich set of graph-based representations, including \citet{reddy2016transforming}'s and other typed attribute grammars which can be used to reason about syntactic and semantic relations between natural language entities. The pointer network architecture~\citep{vinyals2015pointer, vinyals2015order} can be used to construct permutation-invariant semantic relations between entities, and has important applications in dependency parsing~\citep{ma2018stack}, named-entity recognition~\citep{lample2016neural}, and other semantic parsing tasks where sequence-based representations fall short. Pointer networks can be extended with a copy-mechanism~\citep{li2017code} to handle out-of-vocabulary code tokens.
 
-Prior work has studied dataflow and datatypes in code~\citep{si2018learning, gu2018deep, liu2019neural}, as well as document hierarchy~\citep{yang2016hierarchical} and link-based~\citep{zhang2018link} learning representations. Entity linking in doc-to-doc (D2D) and source-to-source (S2S) is a straightforward application of link prediction~\citep{zhang2018link} and code embedding~\citep{gu2018deep} techniques, but cross-domain transfer remains challenging. \citet{robillard2015recommending, robillard2017demand} first explore the task of predicting reference API docs from source code using manual annotation. Prior work also studies the association between comments and code entities~\citep{iyer2018mapping, panthaplackel2020associating} using machine learning, but only within source code.
+Prior work has studied dataflow and datatype representations in source code~\citep{si2018learning, gu2018deep, liu2019neural}, as well as structural information in natural language, including document hierarchy~\citep{yang2016hierarchical} and link-based~\citep{zhang2018link} representations. Entity alignment in doc-to-doc (D2D) and source-to-source (S2S) is a straightforward application of link prediction~\citep{zhang2018link} and code embedding~\citep{gu2018deep} techniques, but cross-domain transfer remains challenging. \citet{robillard2015recommending, robillard2017demand} first explore the task of suggesting reference API docs from source code using human assistance. Prior work also studies the association between comments and code entities~\citep{iyer2018mapping, panthaplackel2020associating} using machine learning, but only within source code.
 
-Maintainers of widely-used software projects often publish web-based developer docs, typically stored in markup languages like HTML or Markdown~\citep{terrasa2018using}. These files contain a collection of natural language sentences, markup, and hyperlinks to other documents and source code entities. Both the document tree and link graph contain important semantic information: the markup describes the text in relation to the other entities in the document hierarchy~\citep{yang2016hierarchical}, while the link graph describes the relationship between the parent document and related documents or source code entities. Documents occasionally contain hyperlinks to source code, but source code rarely contains links to developer documents. To compensate for the sparsity of hyperlinks between code and documentation, new techniques are required.
+Maintainers of widely-used software projects often publish web-based developer docs, typically stored in markup languages like HTML or Markdown~\citep{terrasa2018using}. These files contain a collection of natural language sentences, markup, and hyperlinks to other documents and source code entities. Both the document tree and the link graph contain important semantic information: the markup describes the text in relation to the other entities in the document hierarchy~\citep{yang2016hierarchical}, while the link graph describes the relationship between the parent document and related documents or source code entities. Documents occasionally contain hyperlinks to source code, but source code rarely contains links to developer documents. To compensate for the sparsity of hyperlinks between code and documentation, new techniques are required.
 
-Unlike natural language where polysemy is common~\citep{ganea2016probabilistic}, named entities in most programming languages are relatively unique, even across unrelated APIs. Given a single token in source code or documentation, a skilled developer can quickly locate the referent, even without prior familiarity with the API in question, by using some contextual cues. For example, we observe the string \tinline{AbstractSingletonProxyFactoryBean} has the following properties:
+Unlike natural language where polysemy is a common phenomenon~\citep{ganea2016probabilistic}, most non-trivial tokens in source code are unique, even across unrelated codebases. While the frequency of out-of-vocabulary (OOV) tokens presents a considerable challenge for language modeling, it is an auspicious property for code search, where two lexical matches almost always refer to a single entity. Given a token in either source code or documentation, a skilled developer can quickly locate the entity in a large corpus. Suppose we are given the string \tinline{AbstractSingletonProxyFactoryBean}. We observe it has the following properties:
 
 \begin{enumerate}
     \item The string is camel-case, indicating it refers to an entity in a camel-case language.
@@ -175,11 +175,11 @@ Unlike natural language where polysemy is common~\citep{ganea2016probabilistic},
     \item The string begins with a capital letter, indicating it refers to a class or interface.
 \end{enumerate}
 
-Developers often use a tool called \tinline{grep} to locate files, which accepts queries written in the regular expression (regex)language, a domain specific language for string parsing. Skilled \tinline{grep} users are able to rapidly construct a regular expression which retrieves the document with high probability whilst omitting irrelevant results. Assuming the aforementioned entity exists on a filesystem, one might simply execute the following command to locate it:
+Developers often use a tool called \tinline{grep} to locate files, which accepts queries written in the regular expression (regex) language, a domain specific language for string parsing. Skilled \tinline{grep} users are able to rapidly construct a regular expression which retrieves any document with high probability whilst omitting irrelevant results. Assuming this entity exists on our filesystem, we can simply execute the following command to locate it:
 
 \centerline{\tinline{\$ grep -r --include .java "class AbstractSingletonProxyFactoryBean" .}}
 
-We hypothesize it is possible to construct a short query which uniquely identifies any named entity (assuming it exists) in a corpus of software documents and furthermore, it is possible to learn a program which synthesizes a query retrieving the canonical entity with high probability, given a named entity reference and its surrounding documentation context.
+We hypothesize there exists a short regex which uniquely retrieves any named entity (assuming it exists) in a naturally occurring corpus of software artifacts. Given a named entity and its surrounding context, our goal is to synthesize a regular expression which selects only the link target, and as few other artifacts from the corpus as possible.
 
 \section{Background}
 
@@ -194,7 +194,7 @@ Let $\Sigma = \{$\tinline{A}, \tinline{a}, \ldots, \tinline{Z}, \tinline{z}, \ti
     \code{.}
 \end{equation}
 
-An expression in $J_<$ is a regular expression, reducible to a non-deterministic finite automaton (NFA) using Glushkov's algorithm ~\citep{glushkov1961abstract}, independently discovered by McNaughton-Yamada-Thompson, as shown in \autoref{fig:regex_to_nfa}. NFA are reducible to both deterministic finite automata (DFA) using the powerset construction~\citep{rabin1959finite} and regular expressions using Arden's Lemma~\citep{arden1961delayed}. It is also possible to convert regular expressions directly to DFA using the Berry-Sethi Algorithm~\citep{berry1986regular}.
+An expression in $J_<$ is a regular expression, reducible to a non-deterministic finite automaton (NFA) using \citet{glushkov1961abstract} algorithm as shown in \autoref{fig:regex_to_nfa}, independently discovered by McNaughton-Yamada-Thompson. NFA are reducible to both deterministic finite automata (DFA) using the powerset construction~\citep{rabin1959finite} and regular expressions using Arden's Lemma~\citep{arden1961delayed}. Regular expressions can also be converted directly to DFA using the Berry-Sethi Algorithm~\citep{berry1986regular}.
 
 % https://www3.nd.edu/~kogge/courses/cse30151-fa17/Public/other/tikz_tutorial.pdf
 % Glushkov's algorithm: https://www.irif.fr/~jep/PDF/MPRI/MPRI.pdf#subsection.3.5.2
@@ -229,25 +229,25 @@ An expression in $J_<$ is a regular expression, reducible to a non-deterministic
 
 Formally, an NFA is a 5-tuple $\langle Q, \Sigma, \Delta, q_0, F \rangle$, where $Q$ is a finite set of states, $\Sigma$ is the alphabet, $\Delta :Q\times (\Sigma \cup \{\epsilon \})\rightarrow P(Q)$ is the transition function, $q_0 \in Q$ is the initial state and $F \subseteq Q$ are the terminal states. An NFA can be represented as a directed graph whose adjacency matrix is defined by the transition function, with edge labels representing symbols from the alphabet and binary node labels indicating whether the node is a terminal or nonterminal state.
 
-We pose the problem as a few-shot generative modeling task, where the input is a local graph consisting of the query text and graph context, and the output is an adjacency matrix defining the NFA. Our goal is to synthesize an NFA which accepts the target document and no other documents or as few others as possible from the entire corpus.
+We pose the problem as a few-shot generative modeling task, where the input is a node embedding consisting of the query text and local graph context, and the output is a graph defining the NFA.
 
 \section{Method}
 
-Let $\mathcal D$ be a document graph, constructed by semantically parsing the document's contents, and neighboring documents from the link graph. Let $\mathcal T$ be a code token, corresponding to a node in a document graph $\mathcal D$. Following prior work in few-shot meta-learning on graphs, we adapt the training procedure suggested by \citet{bose2019meta} to pretrain a meta learner $\mathcal M$ on the following objective:
+Let $\mathcal D$ be a document graph, constructed by semantically parsing the document's contents, and neighboring documents from the link graph. Let $\mathcal T$ be a code token, corresponding to a node in the document graph $\mathcal D$. Following prior work in few-shot meta-learning on graphs, we adapt the training procedure suggested by \citet{bose2019meta} to pretrain a meta learner $\mathcal M$ on the following objective:
 
 \begin{equation}
     \mathcal L_{G} = \mathbb E_{q_\phi}[\log p(A^{train}|Z)] - KL[q_\phi(Z|X, A^{train}) || p(z)]
 \end{equation}
 
-Our synthesizer is trained on a local context, a semantic graph parsed from the parent document and neighboring documents from the link graph. Instead of directly performing link prediction, we train a generative model to output an NFA, which can be directly translated to a regular expression to select the candidate documents. Using the pretrained embedding, we then rank each candidate document using the Weisfeiler-Lehman similarity~\citep{shervashidze2011weisfeiler}, then select a single document to link. We then compare precision and recall over the meta-test set.
+Our synthesizer is trained on a node embedding from the local graph context, a semantic graph parsed from the parent document and neighboring documents in the link graph. Instead of directly performing link prediction, we train our generative model to output an NFA, which can be directly translated to a regular expression. We then compare precision and recall over the meta-test set.
 
 \section{Dataset}
 
 Java, one of the most prolific programming languages on GitHub, is a statically typed language with a high volume of API documentation. Offering a variety of tools for source code~\citep{parr2013definitive, hosseini2013javaparser, kovalenko2019pathminer} and natural language~\citep{manning2014stanford, grella2018non} parsing, it is a convenient language for both analysis and implementation. Our dataset consists of Java repositories on GitHub, and their accompanying developer documents. All projects in our dataset have a collection of source code files and multiple related repositories on GitHub.
 
-We construct two datasets consisting of naturally-occurring links between developer docs and source code, and a surrogate set of links constructed by matching lexical tokens available in both domains. Our target is recovery of ground truth links in the test set and surrogate links in the lexical matching graph. We first add weighted edges between code and docs, then evaluate our approach by predicting synthetic links between tokens contained in code fragments and markup entities which refer to the selected token. In addition, we evaluate our approach on both D2D and C2C link retrieval, as well as precision and recall on the surrogate link relations.
+We construct two datasets consisting of naturally-occurring links in developer docs and source code, and a surrogate set of links constructed by matching lexical tokens across domains. Our target is recovery of ground truth links in the test set and surrogate links in the lexical matching graph. We evaluate our approach on both D2D and C2C link retrieval, as well as precision and recall on the surrogate link relations.
 
-Our data consists of two complementary datasets: abstract syntax trees collected from Java source code and developer documentation. We use the astminer~\citep{kovalenko2019pathminer} library to parse Java code, jsoup~\citep{hedley2009jsoup} to parse HTML and Stanford's CoreNLP~\citep{manning2014stanford} library to parse dependency graphs from developer docs. Consider the following AST, parsed from the \href{https://www.eclipse.org/collections/}{Eclipse Collections} Java project:
+Our data consists of two complementary datasets: abstract syntax trees (AST)s collected from Java source code and developer documentation. We use the astminer~\citep{kovalenko2019pathminer} library to parse Java code, jsoup~\citep{hedley2009jsoup} to parse HTML and Stanford's CoreNLP~\citep{manning2014stanford} library to parse dependency graphs from developer docs. Consider the following AST, parsed from the \href{https://www.eclipse.org/collections/}{Eclipse Collections} Java project:
 
 \vspace{20pt}
 
@@ -279,7 +279,7 @@ Our goal is to connect these two graphs using a common model for source code and
 
 \section{Preliminary Results}
 
-We compare precision on our benchmark using top-K rank retrieval with respect to various baselines. For instance, to compute the count-search baseline, we search our corpus for the hyperlink anchor text, and rank the resulting documents by the frequency of the anchor text. Results are shown in \autoref{fig:baseline_comparison}.
+We compare precision on our benchmark using top-K rank retrieval with respect to various baselines. For instance, to compute the count-search baseline, we search our corpus for the hyperlink anchor text, and rank the resulting documents by frequency of the anchor text. Results are shown in \autoref{fig:baseline_comparison}.
 
 \begin{figure}[H]
 \centering
@@ -299,13 +299,13 @@ We compare precision on our benchmark using top-K rank retrieval with respect to
         };
     \end{axis}
 \end{tikzpicture}
-\caption{Preliminary results.}
+\caption{Results for count-based lexical matching baseline.}
 \label{fig:baseline_comparison}
 \end{figure}
 
 \section{Discussion}
 
-Preliminary results indicate ~40\% of all links in our dataset point to the document in which the anchor text occurs most frequently across the corpus, and ~93\% of all links refer to documents where the ground truth link occurs in the top-10 results ranked by frequency of the anchor text. In future work, we will compare performance against a neural network using a simple word-embedding approach, trained to minimize cosine distance between the source document and target document's context, using a set of candidate links returned by the count-search baseline. Finally, we will compare our approach against the count-search baseline.
+Preliminary results indicate ~40\% of all links in our dataset point to the document in which the anchor text occurs most frequently in the corpus, and ~93\% of all links refer to documents where the ground truth link occurs in the top-10 results ranked by frequency of the anchor text. In future work, we will compare performance against a neural network using a simple word-embedding approach, trained to minimize cosine distance between the source document and target document's context, using a set of candidate links returned by the count-search baseline. Finally, we will compare our approach against the count-search baseline.
 
 In the weeks, we will need to train a synthesizer using a yet-to-be-determined loss function over the regular expression. Prior literature suggests there may be a way to backpropogate through the regular expression synthesizer using the ~\citet{brzozowski1964derivatives} derivative. Furthermore, we will need to construct the semantic graph embedding over the surrounding context. This will require some additional consideration.
 
