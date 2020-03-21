@@ -31,15 +31,14 @@ fun FileObject.asHtmlDoc(uri: String = "") =
     null
   }
 
-fun parseDocs() =
-  File(archivesDir).listFiles()!!.sortedBy { -it.length() }.parallelStream()
-    .map { archive ->
-      archive.getHtmlFiles()?.map { file ->
-        file.asHtmlDoc("${file.url}")?.let {
-          convertJsoupDocToDocTrace(it)
-        }
+fun parseDocs(): List<Stream<Doc?>> =
+  File(archivesDir).listFiles()!!.map { archive ->
+    archive.getHtmlFiles().stream().map { file ->
+      file.asHtmlDoc("${file.url}")?.let {
+        convertJsoupDocToDocTrace(it)
       }
     }
+  }
 
 fun main() {
   indexDocs()

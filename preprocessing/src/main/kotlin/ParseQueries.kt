@@ -8,11 +8,15 @@ import org.jsoup.nodes.Document
 import java.io.File
 import java.io.IOException
 import java.io.ObjectOutputStream
+import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 
 fun main(args: Array<String>) {
   val linksFile = args[0]
   buildIndex(linksFile)
+
+  System.err.println("Inverted index contains: ${invertedIndex.size()} elements")
+  System.err.println("Phrase-document count contains: ${phraseCounts.size()} elements")
 
   storeIndex(linksFile)
 
@@ -28,13 +32,13 @@ fun main(args: Array<String>) {
 }
 
 // Contains a list of words and the URIs of documents in which they can be found.
-val invertedIndex = Multimaps.synchronizedMultimap(HashMultimap.create<String, String>())
+val invertedIndex = Multimaps.synchronizedMultimap(HashMultimap.create<String, URI>())
 val phraseCounts = AtomicLongMap.create<String>()
 val anchorCounts = AtomicLongMap.create<String>()
 
 fun String.archive() = substringAfter(archivesAbs).drop(1).substringBefore("/")
 
-fun String.fetchTargetDoc(): Document? =
+fun URI.fetchTargetDoc(): Document? =
   try {
     VFS.getManager().resolveFile(this)?.asHtmlDoc()
   } catch (ex: Exception) {
@@ -82,11 +86,11 @@ fun String.extractConcordances(query: String? = null): List<String> {
   }
 }
 
-class CandidateDoc(val uri: String, val title: String, val context: List<String>)
+class CandidateDoc(val uri: URI, val title: String, val context: List<String>)
 
 class LinkWithCountSearchCandidates(val link: Link, var countSearchCandidates: List<CandidateDoc>) {
   fun contexts() = countSearchCandidates.joinToString("\t") {
-    it.uri.compact() + "\t" + it.title + "\t" + it.context.joinToString(" … ").noTabs()
+    it.uri.compact() + "\t" + it.title + "\t" + it.context.joinToString(" … ").csvEscape()
   }.let {
     val columns = it.count { char -> char == '\t' }
     if (columns <= TOP_K_DOCS * 3) it + "".padEnd((TOP_K_DOCS * 3 - columns - 1).coerceAtLeast(0), '\t') else it
@@ -104,40 +108,26 @@ fun buildIndex(file: String) {
   println("Read ${links.size} links from $file")
 
   links.map { listOf(it.sourceUri, it.targetUri) }.flatten().distinct()
-    // Ensure we group by the archive filename so that threads do not deadlock on file IO
-//        .parallelStream().collect(Collectors.groupingByConcurrent<String, String> { it.archive() }).entries
-    .parallelStream().forEach { uri ->
-//            entry.value.forEachIndexed { idx, uri ->
-//                if (idx % 20 == 0)
-//                    println("Parsed $idx links of ${entry.value.size} in archive ${entry.key.archiveName()}")
-      indexUri(uri)
-    }
-//        }
-
-  println("Inverted index contains: ${invertedIndex.size()} elements")
-//    println("Top words index contains:")
-//    val entries: MutableSet<MutableMap.MutableEntry<String, MutableCollection<String>>> = invertedIndex.asMap().entries
-//    entries.sortedBy { -it.value.size }.take(50).forEach { println(it.key.padEnd(20, ' ') + " : " + it.value.size) }
-  println("Phrase-document count contains: ${phraseCounts.size()} elements")
+    .parallelStream().forEach { uri -> uri.index() }
 }
 
-private fun indexUri(uri: String) {
-  val docText = uri.fetchTargetDoc()?.text() ?: ""
+private fun URI.index() {
+  val docText = fetchTargetDoc()?.text() ?: ""
   Regex("\\s$VALID_PHRASE\\s").findAll(docText).forEach { phrase ->
     val wholePhrase = phrase.value.drop(1).dropLast(1)
     wholePhrase.split(Regex("[^A-Za-z]")).forEach { phraseFragment ->
-      if (MIN_ALPHANUMERICS < phraseFragment.length) invertedIndex.put(phraseFragment, uri);
-      phraseCounts.incrementAndGet("$phraseFragment@$uri")
+      if (MIN_ALPHANUMERICS < phraseFragment.length) invertedIndex.put(phraseFragment, this);
+      phraseCounts.incrementAndGet("$phraseFragment@$this")
     }
     if (anchorCounts.containsKey(wholePhrase)) {
-      invertedIndex.put(wholePhrase, uri)
-      phraseCounts.incrementAndGet("$wholePhrase@$uri")
+      invertedIndex.put(wholePhrase, this)
+      phraseCounts.incrementAndGet("$wholePhrase@$this")
     }
   }
 }
 
 val TOP_K_DOCS = 20
-fun String.getTopURIsMatchingQuery(): List<String> =
+fun String.getTopURIsMatchingQuery(): List<URI> =
   invertedIndex[this].sortedBy { -phraseCounts["$this@$it"] }.take(TOP_K_DOCS)
 
 private fun storeIndex(linksFile: String) {
@@ -150,13 +140,13 @@ private fun storeIndex(linksFile: String) {
 }
 
 private fun printLinksWithCandidates() =
-  getLinksWithCandidates().forEach { it: LinkWithCountSearchCandidates ->
+  getLinksWithCandidates().forEach {
     val sourceIdx = it.countSearchCandidates.indexOfFirst { candidate -> candidate.uri == it.link.sourceUri }
     val targetIdx = it.countSearchCandidates.indexOfFirst { candidate -> candidate.uri == it.link.targetUri }
-    val srcIdx = (sourceIdx.toString() + "/" + it.countSearchCandidates.size.toString()).padEnd(7)
-    val tgtIdx = (targetIdx.toString() + "/" + it.countSearchCandidates.size.toString()).padEnd(7)
+    val srcIdx = ("$sourceIdx/${it.countSearchCandidates.size}").padEnd(7)
+    val tgtIdx = ("$targetIdx/${it.countSearchCandidates.size}").padEnd(7)
     if (0 <= targetIdx && 0 <= sourceIdx && sourceIdx != targetIdx)
-      println(it.link.anchorText.padEnd(45) + "\t" + srcIdx + "\t" + tgtIdx + "\t" + it.contexts())
+      println("${it.link.anchorText.padEnd(45)}\t$srcIdx\t$tgtIdx\t${it.contexts()}")
   }
 
 private fun getLinksWithCandidates(): List<LinkWithCountSearchCandidates> =
@@ -172,8 +162,9 @@ private fun getCandidatesForQuery(query: String): List<CandidateDoc> =
 private fun computeCandidates(query: String): List<CandidateDoc> =
   query.getTopURIsMatchingQuery().mapNotNull { it.searchForText(query) }
 
-fun String.searchForText(linkText: String): CandidateDoc? =
-  fetchTargetDoc()?.let { CandidateDoc(this, it.title() ?: "", it.text()?.extractConcordances(linkText) ?: listOf()) }
+fun URI.searchForText(linkText: String): CandidateDoc? =
+  fetchTargetDoc()?.let { doc -> CandidateDoc(this, doc.title() ?: "",
+    doc.text()?.extractConcordances(linkText) ?: listOf()) }
 
 fun serializeIndex(file: File) {
   try {
