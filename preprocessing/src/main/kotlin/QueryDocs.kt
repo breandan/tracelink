@@ -10,6 +10,7 @@ import org.apache.lucene.search.TopScoreDocCollector
 import java.io.File
 import java.io.IOException
 import java.io.ObjectInputStream
+import java.net.URI
 import kotlin.system.measureTimeMillis
 
 fun main() {
@@ -27,7 +28,7 @@ private fun deserialize() {
 
 private fun runQuery(query: String, take: Int = 20) =
   queryIndex[query].sortedBy { -counts["$query@$it"] }
-    .mapNotNull { it.searchForText(query) }.take(take).mapIndexed { i, candidateDoc ->
+    .mapNotNull { URI(it).searchForText(query) }.take(take).mapIndexed { i, candidateDoc ->
       "${i + 1}.) ${candidateDoc.title} - ${candidateDoc.context.joinToString("...")}"
     }
 
