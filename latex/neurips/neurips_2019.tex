@@ -224,7 +224,7 @@ Our goal is to connect these two graphs using a common representation for source
 
 \section{Problem}
 
-Suppose we have a set of hyperlinks $H = \{h_0, \ldots, h_m\}$ and documents $D = \{d_0, \ldots d_n\}$. Each document contains a sequence of tokens $T = \{t_0, \ldots, t_p\}$. Each hyperlink $h_i$ is a tuple $\langle t_{anchor}, d_{source}, d_{target}\rangle$. We want a function $\mathcal G: (d_k, t_i; \theta) \mapsto \mathcal R$, parameterized by $\theta$, taking a token and its parent document, which produces a regular expression $\mathcal R: \mathcal D \rightarrow \mathcal D^{*}$ such that $L_{test}$ is minimized.
+Suppose we have a set of hyperlinks $H = \{h_0, \ldots, h_m\}$ and documents $D = \{d_0, \ldots d_n\}$. Each document contains a sequence of tokens $T = \{t_0, \ldots, t_p\}$. Each hyperlink $h_i$ is a tuple $\langle t_{anchor}, d_{source}, d_{target}\rangle$. We want a function $\mathcal G: (t_{anchor}, d_{source}; \theta) \mapsto \mathcal R$, parameterized by $\theta$, taking a token and its parent document, which produces a regex $\mathcal R: \mathcal D \rightarrow \mathcal{B}$. This function tells us whether to accept or reject a given document $\mathcal D$. We seek $\theta$ minimizing $\sum_{d \in D}\mathcal L_{test}(\mathcal G(t_{anchor}, d_{source}; \theta), d_{target})$ for all links in our test set.
 
 \section{Method}
 
