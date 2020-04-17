@@ -157,7 +157,7 @@ McGill University}
 \maketitle
 
 \begin{abstract}
-In this work, we propose a regular expression (RE) synthesizer for entity linking in source code and API documentation which incorporates semantic and relational features from the surrounding context. We demonstrate the effectiveness of our synthesizer on a link prediction task using a corpus of Java code and developer documentation, and demonstrate the effectiveness of model-based representation learning for interpretable link prediction in the source-to-source and doc-to-doc setting.
+In this work, we propose a regular expression (regex) synthesizer for entity linking in source code and API documentation which incorporates semantic and relational features from the surrounding context. We demonstrate the effectiveness of our synthesizer on a link prediction task using a corpus of Java code and developer documentation, and demonstrate the effectiveness of model-based representation learning for interpretable link prediction in the source-to-source and doc-to-doc setting.
 \end{abstract}
 
 \section{Introduction}
@@ -186,7 +186,7 @@ We hypothesize there exists a short regex which retrieves any named entity (assu
 
 \section{Dataset}
 
-Java is a statically-typed language with a high volume of API documentation. Offering a variety of tools for parsing source code~\citep{parr2013definitive, hosseini2013javaparser, kovalenko2019pathminer} and natural language~\citep{manning2014stanford, grella2018non}, it is a convenient language for both analysis and implementation. Our dataset consists of Java repositories on GitHub, and their accompanying developer documents. All projects in our dataset have a collection of source code files and multiple related repositories on GitHub.
+Java is a statically-typed language with a high volume of API documentation. Offering a variety of tools for parsing source code~\citep{parr2013definitive, hosseini2013javaparser, kovalenko2019pathminer} and natural language~\citep{manning2014stanford, grella2018non}, it serves as a convenient language for both analysis and implementation. Our dataset consists of Java repositories on GitHub, and their accompanying documentation. All projects in our dataset have a collection of source code files and natural language documents.
 
 We construct two datasets consisting of naturally-occurring links in developer docs, and a surrogate set of links constructed by matching lexical tokens in developer docs and source code. Our goal is recovery of ground truth links in the test set and surrogate links in the lexical matching graph. We evaluate our approach on both D2D and C2C link retrieval, as well as precision and recall on the surrogate link relations.
 
@@ -224,7 +224,7 @@ Our goal is to connect these two graphs using a common representation for source
 
 \section{Problem}
 
-Our problem can be stated as follows. Suppose we have a set of words $\{w_0, \ldots w_n\}$ containing links.
+Suppose we have a set of hyperlinks $H = \{h_0, \ldots, h_m\}$ and documents $D = \{d_0, \ldots d_n\}$. Each document contains a sequence of tokens $T = \{t_0, \ldots, t_p\}$. Each hyperlink $h_i$ is a tuple $\langle t_{anchor}, d_{source}, d_{target}\rangle$. We want a function $\mathcal G: (d_k, t_i; \theta) \mapsto \mathcal R$, parameterized by $\theta$, taking a token and its parent document, which produces a regular expression $\mathcal R: \mathcal D \rightarrow \mathcal D^{*}$ such that $L_{test}$ is minimized.
 
 \section{Method}
 
@@ -244,30 +244,25 @@ Where ` $\cdot$ ' indicates concatenation. $J_<$ is a regular language, reducibl
 % Glushkov's algorithm: https://www.irif.fr/~jep/PDF/MPRI/MPRI.pdf#subsection.3.5.2
 \begin{figure}
     \begin{tikzpicture}[->, >=stealth,]
-        \node[state, initial, accepting] (q1) {$q_1$};
-        \node[state, left of=q1] (q2) {$q_2$};
-        \node[state, accepting, left of=q2] (q3) {$q_3$};
-        \node[state, accepting, right of=q1] (q4) {$q_4$};
-        \node[state, above right of=q4] (q5) {$q_5$};
-        \node[state, accepting, below right of=q4] (q6) {$q_6$};
+        \node[state, initial above, accepting] (q0) {$q_0$};
+        \node[state, left of=q0] (q1) {$q_1$};
+        \node[state, accepting, left of=q1] (q2) {$q_2$};
+        \node[state, accepting, right of=q0] (q3) {$q_3$};
+        \node[state, above right of=q3] (q4) {$q_4$};
+        \node[state, accepting, below right of=q3] (q5) {$q_5$};
         \draw
-%        (q1) edge[loop above] (q1)
-        (q1) edge node{\tinline a} (q2)
-        (q1) edge node{\tinline b} (q4)
-        (q2) edge[bend right] node{\tinline a} (q3)
-        (q3) edge[bend right] node{\tinline b} (q2)
-        (q4) edge[loop above] node{\tinline a} (q4)
-        (q4) edge node{\tinline a} (q5)
-        (q6) edge node{\tinline a} (q4)
-        (q5) edge[bend left] node{\tinline b} (q6)
-        (q6) edge[bend left] node{\tinline a} (q5)
-        ;
-%        (q2) edge[bend left, above] node{0} (q3)
-        ;
-%        (q2) edge[bend left, above] node{0} (q3)
-%        (q3) edge[bend left, below] node{0, 1} (q2);
+%        (q0) edge[loop above] (q0)
+        (q0) edge node{\tinline b} (q1)
+        (q0) edge node{\tinline a} (q3)
+        (q1) edge[bend right] node{\tinline a} (q2)
+        (q2) edge[bend right] node{\tinline b} (q1)
+        (q3) edge[loop above] node{\tinline a} (q3)
+        (q3) edge node{\tinline a} (q4)
+        (q5) edge node{\tinline a} (q3)
+        (q4) edge[bend left] node{\tinline b} (q5)
+        (q5) edge[bend left] node{\tinline a} (q4)
     \end{tikzpicture}
-    \caption{NFA corresponding to the regex \tinline{(a(ab)*)*(ba)*}.}
+    \caption{NFA corresponding to the regex \tinline{(a(ab)*)*(ba)*}, where $q_{\{0, 2, 3, 5\}} \in F$.}
     \label{fig:regex_to_nfa}
 \end{figure}
 
@@ -275,11 +270,7 @@ Formally, an NFA is a 5-tuple $\langle Q, \Sigma, \Delta, q_0, F \rangle$, where
 
 We pose the problem as a few-shot generative modeling task, where the input is a node embedding consisting of the query text and local graph context, and the output is a regular expression retrieving the link target with high precision.
 
-Let $\mathcal D$ be a document graph, constructed by semantically parsing the document's contents, and neighboring documents from the link graph. Let $\mathcal T$ be a code token, corresponding to a node in the document graph $\mathcal D$. Following prior work in few-shot meta-learning on graphs, we adapt the training procedure suggested by \citet{shrivastava2020onthefly} to pretrain a meta learner $\mathcal M$ on the following objective:
-
-\begin{equation}
-    \mathcal L_{G} = \mathbb E_{q_\phi}[\log p(A^{train}|Z)] - KL[q_\phi(Z|X, A^{train}) || p(z)]
-\end{equation}
+Let $\mathcal D$ be a document graph, constructed by semantically parsing the document's contents, and neighboring documents from the link graph. Let $\mathcal T$ be a code token, corresponding to a node in the document graph $\mathcal D$.
 
 Our synthesizer is trained on a node embedding from the local graph context, a semantic graph parsed from the parent document and neighboring documents in the link graph. Instead of directly performing link prediction, we train our generative model to output an NFA. We then compare precision and recall over the meta-test set.
 
@@ -289,7 +280,7 @@ Our synthesizer is trained on a node embedding from the local graph context, a s
     \frac{\partial}{\partial\tinline{t}\texttt{\footnotesize t}}\mathcal Q = \{ s | \tinline{t}\texttt{\footnotesize t}s \in \mathcal Q\}
 \end{equation}
 
-If we interpret the operators ` $|$ ' and ` $\cdot$ ' from \autoref{eq:grammar} as ` $+$ ' and ` $\times$ ' respectively, we recover the standard rules from differential calculus:
+As noted by Brzozowski, if we interpret the operators ` $|$ ' and ` $\cdot$ ' from \autoref{eq:grammar} as ` $+$ ' and ` $\times$ ' respectively, we recover the standard rules from differential calculus:
 
 % http://joypy.osdn.io/notebooks/Derivatives_of_Regular_Expressions.html#reversing-the-derivatives-to-generate-matching-strings
 \begin{equation}
@@ -386,7 +377,7 @@ Suppose we have a function $\mathcal G_{\mathbf \theta}: \mathbb{R}^n \times \ma
 \end{figure}
 
 
-\section{Preliminary Results}
+\section{Preliminary Results and Discussion}
 
 We compare precision on our benchmark using top-K rank retrieval with respect to various baselines. For instance, to compute the count-search baseline, we search our corpus for the hyperlink anchor text, and rank the resulting documents by frequency of the anchor text. Results are shown in \autoref{fig:baseline_comparison}.
 
@@ -412,11 +403,7 @@ We compare precision on our benchmark using top-K rank retrieval with respect to
 \label{fig:baseline_comparison}
 \end{figure}
 
-\section{Discussion}
-
-Preliminary results indicate ~40\% of all links in our dataset point to the document in which the anchor text occurs most frequently in the corpus, and ~93\% of all links refer to documents where the ground truth link occurs in the top-10 results ranked by frequency of the anchor text. In future work, we will compare performance against a neural network using a simple word-embedding approach, trained to minimize cosine distance between the source document and target document's context, using a set of candidate links returned by the count-search baseline. Finally, we will compare our approach against the count-search baseline.
-
-We will need to train a synthesizer using our loss function over the RE. . Furthermore, we will need to construct the semantic graph embedding over the surrounding context. This will require some additional consideration.
+Preliminary results indicate ~40\% of all links in our dataset point to the document in which the anchor text occurs most frequently in the corpus, and ~93\% of all links refer to documents where the ground truth link occurs in the top-10 results ranked by frequency of the anchor text. In future work, we will compare performance against a graph neural network using a word-embedding approach, trained to minimize cosine distance between the source document and target document's context, using a set of candidate links returned by the count-search baseline. Finally, we will compare our approach against the count-search baseline. To do so, we will need to train a synthesizer using our loss function over the regex. Furthermore, we will need to construct the semantic graph embedding over the surrounding context.
 
 \clearpage
 \newpage
