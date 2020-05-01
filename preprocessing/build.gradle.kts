@@ -11,6 +11,7 @@ version = "1.0-SNAPSHOT"
 repositories {
   mavenCentral()
   maven(url = "https://dl.bintray.com/egor-bogomolov/astminer/")
+  maven("https://jitpack.io")
 }
 
 dependencies {
@@ -27,6 +28,10 @@ dependencies {
   implementation("edu.stanford.nlp:stanford-corenlp:3.9.2")
   implementation("edu.stanford.nlp:stanford-corenlp:3.9.2:models")
   implementation("edu.stanford.nlp:stanford-corenlp:3.9.2:models-english")
+
+  implementation("com.github.breandan:progex:master-SNAPSHOT")
+  implementation("com.github.ghaffarian:nanologger:master-SNAPSHOT")
+  implementation("com.github.ghaffarian:graphs:master-SNAPSHOT")
 }
 
 tasks {
