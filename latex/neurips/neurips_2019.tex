@@ -130,6 +130,7 @@
 \definecolor{slightgray}{rgb}{0.90, 0.90, 0.90}
 
 \usepackage{soul}
+\usepackage{natbib}
 \makeatletter
 \def\SOUL@hlpreamble{%
     \setul{}{3.0ex}%
@@ -157,7 +158,7 @@ McGill University}
 \maketitle
 
 \begin{abstract}
-In this work, we propose a regular expression (regex) synthesizer for entity linking in source code and API documentation which incorporates semantic and relational features from the surrounding context. We demonstrate the effectiveness of our synthesizer on a link prediction task using a corpus of Java code and developer documentation, and demonstrate the effectiveness of model-based representation learning for interpretable link prediction in the source-to-source and doc-to-doc setting.
+In this paper, we propose a regular expression (regex) synthesizer for entity linking in source code and API documentation which incorporates semantic and relational features from the surrounding context. We demonstrate the effectiveness of our synthesizer on a link prediction task using a corpus of Java code and developer documentation, and demonstrate the effectiveness of model-based representation learning for interpretable link prediction in the source-to-source and doc-to-doc setting.
 \end{abstract}
 
 \section{Introduction}
@@ -268,7 +269,7 @@ Where ` $\cdot$ ' indicates concatenation. $J_<$ is a regular language, reducibl
 
 Formally, an NFA is a 5-tuple $\langle Q, \Sigma, \Delta, q_0, F \rangle$, where $Q$ is a finite set of states, $\Sigma$ is the alphabet, $\Delta :Q\times (\Sigma \cup \{\epsilon \})\rightarrow P(Q)$ is the transition function, $q_0 \in Q$ is the initial state and $F \subseteq Q$ are the terminal states. An NFA can be represented as a directed graph whose adjacency matrix is defined by the transition function, with edge labels representing symbols from the alphabet and binary node labels indicating whether the node is a terminal or nonterminal state.
 
-We pose the problem as a few-shot generative modeling task, where the input is a node embedding consisting of the query text and local graph context, and the output is a regular expression retrieving the link target with high precision.
+We pose the problem as a few-shot generative modeling task, where the input is a node embedding consisting of the query text and local graph context, and the output is a regular expression used to retrieve the link target.
 
 Let $\mathcal D$ be a document graph, constructed by semantically parsing the document's contents, and neighboring documents from the link graph. Let $\mathcal T$ be a code token, corresponding to a node in the document graph $\mathcal D$.
 
