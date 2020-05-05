@@ -32,11 +32,12 @@ dependencies {
   implementation("com.github.breandan:progex:master-SNAPSHOT")
   implementation("com.github.ghaffarian:nanologger:master-SNAPSHOT")
   implementation("com.github.ghaffarian:graphs:master-SNAPSHOT")
+  implementation("com.github.breandan:kaliningraph:0.0.2")
 }
 
 tasks {
   listOf("ParseDocs", "ParseLinks", "ParseQueries",
-      "QueryDocs", "ParseJava", "ParseEnglish").forEach {
+      "QueryDocs", "ParseJava", "ParseEnglish", "HelloProgex", "HelloKaliningraph").forEach {
     register(it, JavaExec::class) {
       findProperty("retty")?.let { args = listOf("1") }
       findProperty("rocess")?.let { args = listOf(it.toString()) }
