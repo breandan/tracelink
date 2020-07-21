@@ -33,10 +33,11 @@ dependencies {
   implementation("com.github.ghaffarian:nanologger:master-SNAPSHOT")
   implementation("com.github.ghaffarian:graphs:master-SNAPSHOT")
   implementation("com.github.breandan:kaliningraph:0.0.2")
+  implementation("com.github.ISCAS-PMC:roll-library:-SNAPSHOT")
 }
 
 tasks {
-  listOf("ParseDocs", "ParseLinks", "ParseQueries",
+  listOf("ParseDocs", "ParseLinks", "ParseQueries", "FetchNewFiles",
       "QueryDocs", "ParseJava", "ParseEnglish", "HelloProgex", "HelloKaliningraph").forEach {
     register(it, JavaExec::class) {
       findProperty("retty")?.let { args = listOf("1") }
