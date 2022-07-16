@@ -1,9 +1,9 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-  kotlin("jvm") version "1.4.31"
+  kotlin("jvm") version "1.7.10"
   application
-  id("com.github.ben-manes.versions") version "0.36.0"
+  id("com.github.ben-manes.versions") version "0.42.0"
 }
 
 group = "org.example"
@@ -17,14 +17,14 @@ repositories {
 
 dependencies {
   implementation(kotlin("stdlib-jdk8"))
-  implementation("org.jsoup:jsoup:1.12.1")
-  implementation("me.xdrop:fuzzywuzzy:1.2.0")
-  implementation("com.google.guava:guava:30.1-jre")
-  implementation("org.apache.commons:commons-compress:1.20")
-  implementation("org.apache.commons:commons-vfs2:2.7.0")
-  implementation("org.apache.lucene:lucene-core:8.8.1")
-  implementation("org.apache.lucene:lucene-queryparser:8.8.1")
-  implementation("org.apache.lucene:lucene-analyzers-common:8.8.1")
+  implementation("org.jsoup:jsoup:1.15.2")
+  implementation("me.xdrop:fuzzywuzzy:1.4.0")
+  implementation("com.google.guava:guava:31.1-jre")
+  implementation("org.apache.commons:commons-compress:1.21")
+  implementation("org.apache.commons:commons-vfs2:2.9.0")
+  implementation("org.apache.lucene:lucene-core:9.2.0")
+  implementation("org.apache.lucene:lucene-queryparser:9.2.0")
+  implementation("org.apache.lucene:lucene-analyzers-common:8.11.2")
   implementation("io.github.vovak.astminer:astminer:0.6")
 //  implementation("edu.stanford.nlp:stanford-corenlp:3.9.2")
 //  implementation("edu.stanford.nlp:stanford-corenlp:3.9.2:models")
